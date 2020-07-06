@@ -28,6 +28,9 @@ import
   sync_protocol, request_manager, keystore_management, interop, statusbar,
   sync_manager, validator_duties, validator_api, attestation_aggregation
 
+when defined(posix):
+  import posix
+
 const
   genesisFile* = "genesis.ssz"
   hasPrompt = not defined(withoutPrompt)
@@ -1133,6 +1136,7 @@ programMain:
 
   setupMainProc(config.logLevel)
 
+  ## handle command line arguments
   case config.cmd
   of createTestnet:
     var

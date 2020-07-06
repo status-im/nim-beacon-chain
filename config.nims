@@ -1,13 +1,24 @@
+import strutils
+
 if defined(release):
   switch("nimcache", "nimcache/release/$projectName")
 else:
   switch("nimcache", "nimcache/debug/$projectName")
 
+const stack_size {.intdefine.}: int = 0
+when defined(stack_size):
+  when defined(gcc):
+    # conservative compile-time estimation for single functions
+    switch("passC", "-Werror=stack-usage=" & $stack_size)
+  when defined(posix):
+    # limit the stack at runtime, on POSIX systems
+    switch("import", "stew/rlimits")
+  when defined(windows):
+    switch("passL", "-Wl,--stack," & $stack_size)
+
 if defined(windows):
   # disable timestamps in Windows PE headers - https://wiki.debian.org/ReproducibleBuilds/TimestampsInPEBinaries
   switch("passL", "-Wl,--no-insert-timestamp")
-  # increase stack size
-  switch("passL", "-Wl,--stack,8388608")
   # https://github.com/nim-lang/Nim/issues/4057
   --tlsEmulation:off
   if defined(i386):
@@ -59,9 +70,25 @@ else:
   --stacktrace:on
   --linetrace:on
 
-# the default open files limit is too low on macOS (512), breaking the
-# "--debugger:native" build. It can be increased with `ulimit -n 1024`.
-if not defined(macosx):
+var canEnableDebuggingSymbols = true
+if defined(macosx):
+  # The default open files limit is too low on macOS (512), breaking the
+  # "--debugger:native" build. It can be increased with `ulimit -n 1024`.
+  let openFilesLimitTarget = 1024
+  var openFilesLimit = 0
+  try:
+    openFilesLimit = staticExec("ulimit -n").strip(chars = Whitespace + Newlines).parseInt()
+    if openFilesLimit < openFilesLimitTarget:
+      echo "Open files limit too low to enable debugging symbols and lightweight stack traces."
+      echo "Increase it with \"ulimit -n " & $openFilesLimitTarget & "\""
+      canEnableDebuggingSymbols = false
+  except:
+    echo "ulimit error"
+# We ignore this resource limit on Windows, where a default `ulimit -n` of 256
+# in Git Bash is apparently ignored by the OS, and on Linux where the default of
+# 1024 is good enough for us.
+
+if canEnableDebuggingSymbols:
   # add debugging symbols and original files and line numbers
   --debugger:native
 

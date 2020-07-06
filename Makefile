@@ -100,6 +100,9 @@ ifneq ($(USE_LIBBACKTRACE), 0)
 deps: | libbacktrace
 endif
 
+# maximum stack size (in bytes) mirroring Android limits
+NIM_PARAMS := $(NIM_PARAMS) -d:stack_size=1000000
+
 #- deletes and recreates "beacon_chain.nims" which on Windows is a copy instead of a proper symlink
 update: | update-common
 	rm -f beacon_chain.nims && \
