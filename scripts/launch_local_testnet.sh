@@ -141,12 +141,22 @@ else
 	MAKE="make"
 fi
 
-NETWORK_NIM_FLAGS=$(scripts/load-testnet-nim-flags.sh ${NETWORK})
+GANACHE_BLOCK_TIME=14
+GENESIS_DELAY=$((GANACHE_BLOCK_TIME * 3))
+
+NETWORK_NIM_FLAGS="$(scripts/load-testnet-nim-flags.sh ${NETWORK}) \
+	-d:MIN_GENESIS_ACTIVE_VALIDATOR_COUNT=${TOTAL_VALIDATORS} \
+	-d:MIN_GENESIS_TIME=0 \
+	-d:GENESIS_DELAY=${GENESIS_DELAY} \
+	-d:SECONDS_PER_ETH1_BLOCK=$GANACHE_BLOCK_TIME \
+	-d:ETH1_FOLLOW_DISTANCE=2 "
+
 $MAKE LOG_LEVEL="${LOG_LEVEL}" NIMFLAGS="-d:insecure -d:testnet_servers_image ${NETWORK_NIM_FLAGS}" beacon_node
 
 PIDS=""
 WEB3_ARG=""
 DEPOSIT_CONTRACT_ARG=""
+DEPOSIT_CONTRACT_BLOCK_ARG=""
 STATE_SNAPSHOT_ARG=""
 BOOTSTRAP_TIMEOUT=10 # in seconds
 
@@ -173,19 +183,28 @@ if [[ $USE_GANACHE == "0" ]]; then
 
 	STATE_SNAPSHOT_ARG="--state-snapshot=${NETWORK_DIR}/genesis.ssz"
 else
+  BOOTSTRAP_TIMEOUT=$((200 * GANACHE_BLOCK_TIME))
 	make deposit_contract
 
 	echo "Launching ganache"
-	ganache-cli --blockTime 17 --gasLimit 100000000 -e 100000 --verbose > "${DATA_DIR}/log_ganache.txt" 2>&1 &
+	ganache-cli --blockTime $GANACHE_BLOCK_TIME --gasLimit 100000000 -e 100000 --verbose > "${DATA_DIR}/log_ganache.txt" 2>&1 &
 	PIDS="${PIDS},$!"
+
+	sleep 5
 
 	echo "Deploying deposit contract"
 	WEB3_ARG="--web3-url=ws://localhost:8545"
-	DEPOSIT_CONTRACT_ADDRESS=$(./build/deposit_contract deploy $WEB3_ARG)
-	DEPOSIT_CONTRACT_ARG="--deposit-contract=$DEPOSIT_CONTRACT_ADDRESS"
+
+	DEPLOY_CMD_OUTPUT=$(./build/deposit_contract deploy $WEB3_ARG)
+	# https://stackoverflow.com/questions/918886/how-do-i-split-a-string-on-a-delimiter-in-bash
+	OUTPUT_PIECES=(${DEPLOY_CMD_OUTPUT//;/ })
+	DEPOSIT_CONTRACT_ADDRESS=${OUTPUT_PIECES[0]}
+	DEPOSIT_CONTRACT_BLOCK=${OUTPUT_PIECES[1]}
+	DEPOSIT_CONTRACT_ARG="--deposit-contract=$DEPOSIT_CONTRACT_ADDRESS "
+	DEPOSIT_CONTRACT_BLOCK_ARG="--deposit-contract-block=$DEPOSIT_CONTRACT_BLOCK "
 
 	MIN_DELAY=1
-	MAX_DELAY=5
+	MAX_DELAY=3
 
 	BOOTSTRAP_TIMEOUT=$(( MAX_DELAY * TOTAL_VALIDATORS ))
 
@@ -272,6 +291,7 @@ for NUM_NODE in $(seq $BOOTSTRAP_NODE -1 0); do
 		${STATE_SNAPSHOT_ARG} \
 		${WEB3_ARG} \
 		${DEPOSIT_CONTRACT_ARG} \
+		${DEPOSIT_CONTRACT_BLOCK_ARG} \
 		--metrics \
 		--metrics-address="127.0.0.1" \
 		--metrics-port="$(( BASE_METRICS_PORT + NUM_NODE ))" \
