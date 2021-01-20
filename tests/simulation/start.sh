@@ -144,7 +144,9 @@ if [ ! -f "${SNAPSHOT_FILE}" ]; then
       --bootstrap-address=127.0.0.1 \
       --bootstrap-port=$(( BASE_P2P_PORT + BOOTSTRAP_NODE )) \
       --netkey-file=network_key.json \
-      --insecure-netkey-password=true \
+      --key-insecure-password=true \
+      --netkey-insecure-password=true \
+      --non-interactive=true \
       --genesis-offset=30 # Delay in seconds
   fi
 fi

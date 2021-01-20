@@ -157,19 +157,19 @@ if [[ $# != 0 ]]; then
 fi
 NETWORK="testnet${TESTNET}"
 
+MAKEDIR=scripts/makedir.sh
+COPYFILE=scripts/copyfile.sh
+
 if [[ "$REUSE_EXISTING_DATA_DIR" == "0" ]]; then
   rm -rf "${DATA_DIR}"
 fi
 
-mkdir -m 0700 -p "${DATA_DIR}"
+"${MAKEDIR}" "$DATA_DIR"
 
 DEPOSITS_FILE="${DATA_DIR}/deposits.json"
 
 VALIDATORS_DIR="${DATA_DIR}/validators"
-mkdir -p "${VALIDATORS_DIR}"
-
-SECRETS_DIR="${DATA_DIR}/secrets"
-mkdir -p "${SECRETS_DIR}"
+"${MAKEDIR}" "${VALIDATORS_DIR}"
 
 NETWORK_DIR="${DATA_DIR}/network_dir"
 mkdir -p "${NETWORK_DIR}"
@@ -224,7 +224,9 @@ if [[ $USE_GANACHE == "0" ]]; then
     --bootstrap-address=${BOOTSTRAP_IP} \
     --bootstrap-port=${BASE_PORT} \
     --netkey-file=network_key.json \
-    --insecure-netkey-password=true \
+    --netkey-insecure-password=true \
+    --key-insecure-password=true \
+    --non-interactive=true \
     --genesis-offset=${GENESIS_OFFSET} # Delay in seconds
 
   STATE_SNAPSHOT_ARG="--finalized-checkpoint-state=${NETWORK_DIR}/genesis.ssz"
@@ -323,7 +325,7 @@ NETWORK_KEYFILE="../network_key.json"
 
 for NUM_NODE in $(seq 0 $(( NUM_NODES - 1 ))); do
   if [[ ${NUM_NODE} == ${BOOTSTRAP_NODE} ]]; then
-    BOOTSTRAP_ARG="--netkey-file=${NETWORK_KEYFILE} --insecure-netkey-password=true"
+    BOOTSTRAP_ARG="--netkey-file=${NETWORK_KEYFILE} --netkey-insecure-password=true"
   else
     BOOTSTRAP_ARG="--bootstrap-file=${BOOTSTRAP_ENR}"
     # Wait for the master node to write out its address file
@@ -343,26 +345,23 @@ for NUM_NODE in $(seq 0 $(( NUM_NODES - 1 ))); do
   # The first $NODES_WITH_VALIDATORS nodes split them equally between them, after skipping the first $USER_VALIDATORS.
   NODE_DATA_DIR="${DATA_DIR}/node${NUM_NODE}"
   rm -rf "${NODE_DATA_DIR}"
-  mkdir -m 0700 -p "${NODE_DATA_DIR}"
-  mkdir -p "${NODE_DATA_DIR}/validators"
-  mkdir -p "${NODE_DATA_DIR}/secrets"
+  "${MAKEDIR}" "${NODE_DATA_DIR}"
+  "${MAKEDIR}" "${NODE_DATA_DIR}/validators"
 
   if [[ $NUM_NODE -lt $NODES_WITH_VALIDATORS ]]; then
     if [ "${USE_VC:-}" == "1" ]; then
       VALIDATOR_DATA_DIR="${DATA_DIR}/validator${NUM_NODE}"
       rm -rf "${VALIDATOR_DATA_DIR}"
-      mkdir -p "${VALIDATOR_DATA_DIR}/validators"
-      mkdir -p "${VALIDATOR_DATA_DIR}/secrets"
+      "${MAKEDIR}" "${VALIDATOR_DATA_DIR}/validators"
 
       for VALIDATOR in $(ls "${VALIDATORS_DIR}" | tail -n +$(( $USER_VALIDATORS + ($VALIDATORS_PER_VALIDATOR * $NUM_NODE) + 1 + $VALIDATOR_OFFSET )) | head -n $VALIDATORS_PER_VALIDATOR); do
-        cp -a "${VALIDATORS_DIR}/$VALIDATOR" "${VALIDATOR_DATA_DIR}/validators/"
-        cp -a "${SECRETS_DIR}/${VALIDATOR}" "${VALIDATOR_DATA_DIR}/secrets/"
+        echo "Trying to copy ${VALIDATORS_DIR}/$VALIDATOR ${VALIDATOR_DATA_DIR}/validators/"
+        "${COPYFILE}" "${VALIDATORS_DIR}/$VALIDATOR" "${VALIDATOR_DATA_DIR}/validators/"
       done
     fi
 
     for VALIDATOR in $(ls "${VALIDATORS_DIR}" | tail -n +$(( $USER_VALIDATORS + ($VALIDATORS_PER_NODE * $NUM_NODE) + 1 )) | head -n $VALIDATORS_PER_NODE); do
-      cp -a "${VALIDATORS_DIR}/$VALIDATOR" "${NODE_DATA_DIR}/validators/"
-      cp -a "${SECRETS_DIR}/${VALIDATOR}" "${NODE_DATA_DIR}/secrets/"
+      "${COPYFILE}" "${VALIDATORS_DIR}/$VALIDATOR" "${NODE_DATA_DIR}/validators/"
     done
   fi
 
@@ -385,6 +384,8 @@ for NUM_NODE in $(seq 0 $(( NUM_NODES - 1 ))); do
     --metrics \
     --metrics-address="127.0.0.1" \
     --metrics-port="$(( BASE_METRICS_PORT + NUM_NODE ))" \
+    --key-insecure-password=true \
+    --non-interactive=true \
     ${EXTRA_ARGS} \
     > "${DATA_DIR}/log${NUM_NODE}.txt" 2>&1 &
 

@@ -106,9 +106,15 @@ type
 
     netKeyInsecurePassword* {.
       defaultValue: false,
-      desc: "Use pre-generated INSECURE password for network private key " &
-            "file (default: false)"
-      name: "insecure-netkey-password" }: bool
+      desc: "Use pre-generated INSECURE password for network keystores " &
+            "(default: false)"
+      name: "netkey-insecure-password" }: bool
+
+    keyInsecurePassword* {.
+      defaultValue: false,
+      desc: "Use pre-generated INSECURE password for validator keystores " &
+            "(default: false)"
+      name: "key-insecure-password" }: bool
 
     agentString* {.
       defaultValue: "nimbus",
@@ -352,11 +358,6 @@ type
           defaultValue: "validators"
           desc: "Output folder for validator keystores"
           name: "out-validators-dir" }: string
-
-        outSecretsDir* {.
-          defaultValue: "secrets"
-          desc: "Output folder for randomly generated keystore passphrases"
-          name: "out-secrets-dir" }: string
 
         outDepositsFile* {.
           desc: "The name of generated deposits file"

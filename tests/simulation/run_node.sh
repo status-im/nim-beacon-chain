@@ -30,7 +30,7 @@ BOOTSTRAP_ADDRESS_FILE="${SIMULATION_DIR}/node-${BOOTSTRAP_NODE_ID}/beacon_node.
 if [[ "$NODE_ID" != "$BOOTSTRAP_NODE" ]]; then
   BOOTSTRAP_ARG="--bootstrap-file=$BOOTSTRAP_ADDRESS_FILE"
 else
-  BOOTSTRAP_ARG="--netkey-file=network_key.json --insecure-netkey-password"
+  BOOTSTRAP_ARG="--netkey-file=network_key.json --netkey-insecure-password"
 fi
 
 # set up the environment
@@ -41,7 +41,6 @@ cd "$GIT_ROOT"
 
 NODE_DATA_DIR="${SIMULATION_DIR}/node-$NODE_ID"
 NODE_VALIDATORS_DIR=$NODE_DATA_DIR/validators/
-NODE_SECRETS_DIR=$NODE_DATA_DIR/secrets/
 MAKEDIR=$GIT_ROOT/scripts/makedir.sh
 COPYFILE=$GIT_ROOT/scripts/copyfile.sh
 
@@ -57,9 +56,6 @@ fi
 rm -rf "$NODE_VALIDATORS_DIR"
 "$MAKEDIR" "$NODE_VALIDATORS_DIR"
 
-rm -rf "$NODE_SECRETS_DIR"
-"$MAKEDIR" "$NODE_SECRETS_DIR"
-
 VALIDATORS_PER_NODE=$(( NUM_VALIDATORS / (TOTAL_NODES - 1) ))
 if [ "${USE_BN_VC_VALIDATOR_SPLIT:-}" == "yes" ]; then
   # if using validator client binaries in addition to beacon nodes we will
@@ -72,7 +68,6 @@ if [[ $NODE_ID -lt $BOOTSTRAP_NODE ]]; then
   pushd "$VALIDATORS_DIR" >/dev/null
   for VALIDATOR in $(ls | tail -n +$(( ($VALIDATORS_PER_NODE * $NODE_ID) + 1 )) | head -n $VALIDATORS_PER_NODE); do
       "$COPYFILE" "$VALIDATOR" "$NODE_VALIDATORS_DIR"
-      "$COPYFILE" "$SECRETS_DIR/$VALIDATOR" "$NODE_SECRETS_DIR"
     done
   popd >/dev/null
 fi
@@ -92,7 +87,6 @@ $BEACON_NODE_BIN \
   $BOOTSTRAP_ARG \
   --network=$NETWORK_METADATA_FILE \
   --data-dir=$NODE_DATA_DIR \
-  --secrets-dir=$NODE_SECRETS_DIR \
   --node-name=$NODE_ID \
   --tcp-port=$PORT \
   --udp-port=$PORT \
@@ -105,5 +99,7 @@ $BEACON_NODE_BIN \
   --metrics \
   --metrics-address="127.0.0.1" \
   --metrics-port="$(( $BASE_METRICS_PORT + $NODE_ID ))" \
+  --key-insecure-password=true \
+  --non-interactive=true \
   ${ADDITIONAL_BEACON_NODE_ARGS} \
   "$@"

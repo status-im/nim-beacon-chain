@@ -260,7 +260,6 @@ define CONNECT_TO_NETWORK_WITH_VALIDATOR_CLIENT
 		--log-file=build/data/shared_$(1)_$(NODE_ID)/nbc_bn_$$(date +"%Y%m%d%H%M%S").log \
 		--data-dir=build/data/shared_$(1)_$(NODE_ID) \
 		--validators-dir=build/data/shared_$(1)_$(NODE_ID)/empty_dummy_folder \
-		--secrets-dir=build/data/shared_$(1)_$(NODE_ID)/empty_dummy_folder \
 		$(GOERLI_TESTNETS_PARAMS) $(NODE_PARAMS) &
 
 	sleep 4
@@ -277,7 +276,6 @@ define MAKE_DEPOSIT_DATA
 		--network=$(1) \
 		--new-wallet-file=build/data/shared_$(1)_$(NODE_ID)/wallet.json \
 		--out-validators-dir=build/data/shared_$(1)_$(NODE_ID)/validators \
-		--out-secrets-dir=build/data/shared_$(1)_$(NODE_ID)/secrets \
 		--out-deposits-file=$(1)-deposits_data-$$(date +"%Y%m%d%H%M%S").json \
 		--count=$(VALIDATORS)
 endef
@@ -288,7 +286,6 @@ define MAKE_DEPOSIT
 		--out-deposits-file=nbc-$(1)-deposits.json \
 		--new-wallet-file=build/data/shared_$(1)_$(NODE_ID)/wallet.json \
 		--out-validators-dir=build/data/shared_$(1)_$(NODE_ID)/validators \
-		--out-secrets-dir=build/data/shared_$(1)_$(NODE_ID)/secrets \
 		--count=$(VALIDATORS)
 
 	build/deposit_contract sendDeposits \

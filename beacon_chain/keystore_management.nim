@@ -29,6 +29,11 @@ type
     walletPath*: WalletPathPair
     seed*: KeySeed
 
+  KeystoreFlags* = enum
+    NonInteractive, InsecurePassword
+
+  Configurations* = BeaconNodeConf | ValidatorClientConf
+
 const
   minPasswordLen = 12
   minPasswordEntropy = 60.0
@@ -142,6 +147,30 @@ proc checkSensitiveFilePermissions*(filePath: string): bool =
 
   return true
 
+proc getNetKeystoreFlags*(conf: BeaconNodeConf): set[KeystoreFlags] =
+  ## Calculate network KeystoreFlags according to configuration arguments.
+  var res: set[KeystoreFlags]
+  if conf.nonInteractive:
+    res.incl(KeystoreFlags.NonInteractive)
+  if conf.netKeyInsecurePassword:
+    res.incl(KeystoreFlags.InsecurePassword)
+  res
+
+proc getKeystoreFlags*(conf: Configurations): set[KeystoreFlags] =
+  ## Calculate valudator's KeystoreFlags according to configuration arguments.
+  when conf is BeaconNodeConf:
+    var res: set[KeystoreFlags]
+    if conf.nonInteractive:
+      res.incl(KeystoreFlags.NonInteractive)
+    if conf.keyInsecurePassword:
+      res.incl(KeystoreFlags.InsecurePassword)
+    res
+  else:
+    var res: set[KeystoreFlags]
+    if conf.nonInteractive:
+      res.incl(KeystoreFlags.NonInteractive)
+    res
+
 proc keyboardCreatePassword(prompt: string,
                             confirm: string,
                             allowEmpty = false): KsResult[string] =
@@ -154,6 +183,20 @@ proc keyboardCreatePassword(prompt: string,
         return err("Could not read password from stdin")
 
     if password.len == 0 and allowEmpty:
+      echoP "WARNING! You entered an empty password, which is not SECURE. " &
+            "Please confirm your decision by entering word \"empty\"."
+
+      let confirmEmpty =
+        try:
+          readPasswordFromStdin(confirm)
+        except IOError:
+          error "Could not read password from stdin"
+          return err("Could not read password from stdin")
+
+      if confirmEmpty != "empty":
+        echo "An empty password was not confirmed!"
+        continue
+
       return ok("")
 
     # We treat `password` as UTF-8 encoded string.
@@ -213,52 +256,84 @@ proc keyboardGetPassword[T](prompt: string, attempts: int,
       dec(remainingAttempts)
   err("Failed to decrypt keystore")
 
+proc loadStore[T: Keystore|NetKeystore|Wallet](kt: typedesc[T],
+                                          filename: string): Result[T, string] =
+  let res = readAllChars(filename)
+  if res.isOk():
+    try:
+      let keystore = Json.decode(res.get(), T)
+      return ok(keystore)
+    except SerializationError as err:
+      when (T is Keystore) or (T is NetKeystore):
+        error "Invalid keystore format", key_path = filename
+        return err("Invalid keystore format")
+      else:
+        error "Invalid wallet format", wallet_path = filename
+        return err("Invalid wallet format")
+  else:
+    when (T is Keystore) or (T is NetKeystore):
+      error "Could not read keystore file", key_path = filename
+      return err("Could not read keystore file")
+    else:
+      error "Could not read wallet file", wallet_path = filename
+      return err("Could not read wallet file")
+
 proc loadKeystore*(validatorsDir, secretsDir, keyName: string,
-                   nonInteractive: bool): Option[ValidatorPrivKey] =
+                   keystoreFlags: set[KeystoreFlags]): Option[ValidatorPrivKey] =
   let
     keystorePath = validatorsDir / keyName / keystoreFileName
     keystore =
-      try: Json.loadFile(keystorePath, Keystore)
-      except IOError as err:
-        error "Failed to read keystore", err = err.msg, path = keystorePath
-        return
-      except SerializationError as err:
-        error "Invalid keystore", err = err.formatMsg(keystorePath)
-        return
+      block:
+        let res = Keystore.loadStore(keystorePath)
+        if res.isOk():
+          res.get()
+        else:
+          return
 
   let passphrasePath = secretsDir / keyName
   if fileExists(passphrasePath):
+    notice "Trying to unlock keystore using password file",
+           key_path = keystorePath, password_path = passphrasePath
+
     if not(checkSensitiveFilePermissions(passphrasePath)):
-      error "Password file has insecure permissions", key_path = keyStorePath
-      return
-
-    let passphrase = KeystorePass.init:
-      try:
-        readFile(passphrasePath)
-      except IOError as err:
-        error "Failed to read passphrase file", err = err.msg,
-              path = passphrasePath
-        return
-
-    let res = decryptKeystore(keystore, passphrase)
-    if res.isOk:
-      return res.get.some
+      error "Password file has insecure permissions", key_path = keyStorePath,
+            password_path = passphrasePath
     else:
-      error "Failed to decrypt keystore", keystorePath, passphrasePath
-      return
+      let rres = readAllChars(passphrasePath)
+      if rres.isOk():
+        let dres = decryptKeystore(keystore, KeystorePass.init(rres.get()))
+        if dres.isOk():
+          return dres.get().some()
+        else:
+          error "Failed to unlock keystore using password file",
+                key_path = keystorePath, password_path = passphrasePath
+      else:
+        error "Failed to read password file", errMsg = ioErrorMsg(rres.error),
+              password_path = passphrasePath
 
-  if nonInteractive:
-    error "Unable to load validator key store. Please ensure matching passphrase exists in the secrets dir",
-      keyName, validatorsDir, secretsDir = secretsDir
+  block:
+    notice "Trying to unlock keystore using empty password",
+           key_path = keystorePath
+    let res = decryptKeystore(keystore, KeystorePass.init(""))
+    if res.isOk():
+      return res.get().some()
+    else:
+      error "Failed to unlock keystore using empty password",
+            key_path = keystorePath
+
+  if NonInteractive in keystoreFlags:
+    error "Unable to unlock validator's keystore in non-interactive way!",
+          key_name = keyName, key_path = keystorePath
     return
 
-  let prompt = "Please enter passphrase for key \"" &
+  let prompt = "Please enter password to unlock keystore \"" &
                (validatorsDir / keyName) & "\": "
   let res = keyboardGetPassword[ValidatorPrivKey](prompt, 3,
     proc (password: string): KsResult[ValidatorPrivKey] =
       let decrypted = decryptKeystore(keystore, KeystorePass.init password)
       if decrypted.isErr():
-        error "Keystore decryption failed. Please try again", keystorePath
+        error "Failed to unlock keystore using provided password. " &
+              "Please try again", key_path = keystorePath
       decrypted
   )
 
@@ -267,12 +342,13 @@ proc loadKeystore*(validatorsDir, secretsDir, keyName: string,
   else:
     return
 
-iterator validatorKeysFromDirs*(validatorsDir, secretsDir: string): ValidatorPrivKey =
+iterator validatorKeysFromDirs*(validatorsDir,
+                                secretsDir: string): ValidatorPrivKey =
   try:
     for kind, file in walkDir(validatorsDir):
       if kind == pcDir:
         let keyName = splitFile(file).name
-        let key = loadKeystore(validatorsDir, secretsDir, keyName, true)
+        let key = loadKeystore(validatorsDir, secretsDir, keyName, {})
         if key.isSome:
           yield key.get
         else:
@@ -286,7 +362,8 @@ iterator validatorKeys*(conf: BeaconNodeConf|ValidatorClientConf): ValidatorPriv
     for kind, file in walkDir(validatorsDir):
       if kind == pcDir:
         let keyName = splitFile(file).name
-        let key = loadKeystore(validatorsDir, conf.secretsDir, keyName, conf.nonInteractive)
+        let key = loadKeystore(validatorsDir, conf.secretsDir, keyName,
+                               conf.getKeystoreFlags())
         if key.isSome:
           yield key.get
         else:
@@ -301,65 +378,75 @@ type
     RandomSourceDepleted,
     FailedToCreateValidatorDir
     FailedToCreateSecretsDir
-    FailedToCreateSecretFile
     FailedToCreateKeystoreFile
 
-proc loadNetKeystore*(keyStorePath: string,
-                      insecurePwd: Option[string]): Option[lcrypto.PrivateKey] =
+proc loadNetKeystore*(keystorePath: string,
+                      keystoreFlags: set[KeystoreFlags]): Option[lcrypto.PrivateKey] =
 
   if not(checkSensitiveFilePermissions(keystorePath)):
-    error "Network keystorage file has insecure permissions",
+    error "Network keystore file has insecure permissions",
           key_path = keyStorePath
     return
 
-  let keyStore =
-    try:
-      Json.loadFile(keystorePath, NetKeystore)
-    except IOError as err:
-      error "Failed to read network keystore", err = err.msg,
-            path = keystorePath
-      return
-    except SerializationError as err:
-      error "Invalid network keystore", err = err.formatMsg(keystorePath)
-      return
+  let keystore =
+    block:
+      let res = NetKeystore.loadStore(keystorePath)
+      if res.isOk():
+        res.get()
+      else:
+        return
 
-  if insecurePwd.isSome():
-    warn "Using insecure password to unlock networking key"
-    let decrypted = decryptNetKeystore(keystore, KeystorePass.init insecurePwd.get)
+  if InsecurePassword in keystoreFlags:
+    warn "Using insecure password to unlock network keystore",
+         key_path = keystorePath
+    let decrypted = decryptNetKeystore(keystore,
+                                       KeystorePass.init(""))
     if decrypted.isOk:
       return some(decrypted.get())
     else:
-      error "Network keystore decryption failed", key_store = keyStorePath
-      return
-  else:
-    let prompt = "Please enter passphrase to unlock networking key: "
-    let res = keyboardGetPassword[lcrypto.PrivateKey](prompt, 3,
-      proc (password: string): KsResult[lcrypto.PrivateKey] =
-        let decrypted = decryptNetKeystore(keystore, KeystorePass.init password)
-        if decrypted.isErr():
-          error "Keystore decryption failed. Please try again", keystorePath
-        decrypted
-    )
-    if res.isOk():
-      some(res.get())
-    else:
-      return
+      error "Failed to unlock network keystore using insecure password",
+            key_path = keystorePath
 
-proc saveNetKeystore*(rng: var BrHmacDrbgContext, keyStorePath: string,
-                      netKey: lcrypto.PrivateKey, insecurePwd: Option[string]
-                     ): Result[void, KeystoreGenerationError] =
+  if NonInteractive in keystoreFlags:
+    error "Unable to unlock network keystore in non-interactive way!",
+          key_path = keystorePath
+    return
+
+  let prompt = "Please enter password to unlock network keystore: "
+  let res = keyboardGetPassword[lcrypto.PrivateKey](prompt, 3,
+    proc (password: string): KsResult[lcrypto.PrivateKey] =
+      let decrypted = decryptNetKeystore(keystore, KeystorePass.init password)
+      if decrypted.isErr():
+        error "Failed to unclock network keystore using provided password",
+              key_path = keystorePath
+      decrypted
+  )
+
+  if res.isOk():
+    some(res.get())
+  else:
+    return
+
+proc saveNetKeystore*(rng: var BrHmacDrbgContext, keystorePath: string,
+                      netKey: lcrypto.PrivateKey,
+                      keystoreFlags: set[KeystoreFlags]): Result[void, KeystoreGenerationError] =
   let password =
-    if insecurePwd.isSome():
-      warn "Using insecure password to lock networking key",
-           key_path = keyStorePath
-      insecurePwd.get()
+    if InsecurePassword in keystoreFlags:
+      warn "Using insecure password to lock network keystore",
+           key_path = keystorePath
+      ""
     else:
-      let prompt = "Please enter NEW password to lock network key storage: "
-      let confirm = "Please confirm, network key storage password: "
-      let res = keyboardCreatePassword(prompt, confirm)
-      if res.isErr():
+      if NonInteractive in keystoreFlags:
+        error "Unable to lock network keystore in non-interactive way!",
+              key_path = keystorePath
         return err(FailedToCreateKeystoreFile)
-      res.get()
+      else:
+        let prompt = "Please enter NEW password to lock network keystore: "
+        let confirm = "Please confirm, network keystore password: "
+        let res = keyboardCreatePassword(prompt, confirm)
+        if res.isErr():
+          return err(FailedToCreateKeystoreFile)
+        res.get()
 
   let keyStore = createNetKeystore(kdfScrypt, rng, netKey,
                                    KeystorePass.init password)
@@ -367,28 +454,46 @@ proc saveNetKeystore*(rng: var BrHmacDrbgContext, keyStorePath: string,
   try:
     encodedStorage = Json.encode(keyStore)
   except SerializationError:
-    error "Could not serialize network key storage", key_path = keyStorePath
+    error "Could not serialize network keystore", key_path = keystorePath
     return err(FailedToCreateKeystoreFile)
 
-  let res = secureWriteFile(keyStorePath, encodedStorage)
+  let res = secureWriteFile(keystorePath, encodedStorage)
   if res.isOk():
     ok()
   else:
-    error "Could not write to network key storage file",
-          key_path = keyStorePath
+    error "Could not write to network keystore file", key_path = keystorePath
     err(FailedToCreateKeystoreFile)
 
 proc saveKeystore(rng: var BrHmacDrbgContext,
-                  validatorsDir, secretsDir: string,
+                  validatorsDir: string,
                   signingKey: ValidatorPrivKey, signingPubKey: ValidatorPubKey,
-                  signingKeyPath: KeyPath): Result[void, KeystoreGenerationError] =
+                  signingKeyPath: KeyPath,
+                  passopt: Option[KeystorePass],
+                  keystoreFlags: set[KeystoreFlags]): Result[void, KeystoreGenerationError] =
   let
     keyName = "0x" & $signingPubKey
     validatorDir = validatorsDir / keyName
+    prompt = "Please enter new password to lock keystore: "
+    confirm = "Please confirm password: "
 
   if not existsDir(validatorDir):
-    var password = KeystorePass.init ncrutils.toHex(getRandomBytes(rng, 32))
-    defer: burnMem(password)
+    let password =
+      if passopt.isSome():
+        passopt.get()
+      else:
+        if InsecurePassword in keystoreFlags:
+          KeystorePass.init("")
+        else:
+          if NonInteractive in keystoreFlags:
+            error "Unable to lock keystore in non-interactive way!"
+            return err(FailedToCreateKeystoreFile)
+
+          let res = keyboardCreatePassword(prompt, confirm, allowEmpty = true)
+          if res.isErr():
+            error "Unable to lock keystore in interactive way"
+            return err(FailedToCreateKeystoreFile)
+
+          KeystorePass.init(res.get())
 
     let
       keyStore = createKeystore(kdfPbkdf2, rng, signingKey,
@@ -406,14 +511,6 @@ proc saveKeystore(rng: var BrHmacDrbgContext,
     if vres.isErr():
       return err(FailedToCreateValidatorDir)
 
-    let sres = secureCreatePath(secretsDir)
-    if sres.isErr():
-      return err(FailedToCreateSecretsDir)
-
-    let swres = secureWriteFile(secretsDir / keyName, password.str)
-    if swres.isErr():
-      return err(FailedToCreateSecretFile)
-
     let kwres = secureWriteFile(keystoreFile, encodedStorage)
     if kwres.isErr():
       return err(FailedToCreateKeystoreFile)
@@ -425,10 +522,10 @@ proc generateDeposits*(preset: RuntimePreset,
                        seed: KeySeed,
                        firstValidatorIdx, totalNewValidators: int,
                        validatorsDir: string,
-                       secretsDir: string): Result[seq[DepositData], KeystoreGenerationError] =
+                       keystoreFlags: set[KeystoreFlags]): Result[seq[DepositData], KeystoreGenerationError] =
   var deposits: seq[DepositData]
 
-  notice "Generating deposits", totalNewValidators, validatorsDir, secretsDir
+  notice "Generating deposits", totalNewValidators, validatorsDir
 
   # We'll reuse a single variable here to make the secret
   # scrubbing (burnMem) easier to handle:
@@ -449,9 +546,10 @@ proc generateDeposits*(preset: RuntimePreset,
     derivedKey = deriveChildKey(derivedKey, 0) # This is the signing key
     let signingPubKey = derivedKey.toPubKey
 
-    ? saveKeystore(rng, validatorsDir, secretsDir,
+    ? saveKeystore(rng, validatorsDir,
                    derivedKey, signingPubKey,
-                   makeKeyPath(validatorIdx, signingKeyKind))
+                   makeKeyPath(validatorIdx, signingKeyKind),
+                   none[KeystorePass](), keystoreFlags)
 
     deposits.add preset.prepareDeposit(withdrawalPubKey, derivedKey, signingPubKey)
 
@@ -514,7 +612,8 @@ proc resetAttributesNoError() =
     except IOError: discard
 
 proc importKeystoresFromDir*(rng: var BrHmacDrbgContext,
-                             importedDir, validatorsDir, secretsDir: string) =
+                             importedDir, validatorsDir: string,
+                             keystoreFlags: set[KeystoreFlags]) =
   var password: TaintedString
   defer: burnMem(password)
 
@@ -532,14 +631,12 @@ proc importKeystoresFromDir*(rng: var BrHmacDrbgContext,
         continue
 
       let keystore =
-        try:
-          Json.loadFile(file, Keystore)
-        except SerializationError as e:
-          warn "Invalid keystore", err = e.formatMsg(file)
-          continue
-        except IOError as e:
-          warn "Failed to read keystore file", file, err = e.msg
-          continue
+        block:
+          let res = Keystore.loadStore(file)
+          if res.isOk():
+            res.get()
+          else:
+            continue
 
       var firstDecryptionAttempt = true
 
@@ -553,9 +650,10 @@ proc importKeystoresFromDir*(rng: var BrHmacDrbgContext,
           let privKey = ValidatorPrivKey.fromRaw(secret)
           if privKey.isOk:
             let pubKey = privKey.value.toPubKey
-            let status = saveKeystore(rng, validatorsDir, secretsDir,
-                                      privKey.value, pubKey,
-                                      keystore.path)
+            let status = saveKeystore(rng, validatorsDir, privKey.value, pubKey,
+                                      keystore.path,
+                                      some(KeystorePass.init(password)),
+                                      keystoreFlags)
             if status.isOk:
               notice "Keystore imported", file
             else:
@@ -838,13 +936,8 @@ proc unlockWalletInteractively*(wallet: Wallet): Result[KeySeed, string] =
   else:
     err "Unlocking of the wallet failed."
 
-proc loadWallet*(fileName: string): Result[Wallet, string] =
-  try:
-    ok Json.loadFile(fileName, Wallet)
-  except SerializationError as err:
-    err "Invalid wallet syntax: " & err.formatMsg(fileName)
-  except IOError as err:
-    err "Error accessing wallet file \"" & fileName & "\": " & err.msg
+proc loadWallet*(filename: string): Result[Wallet, string] =
+  Wallet.loadStore(filename)
 
 proc findWallet*(config: BeaconNodeConf,
                  name: WalletName): Result[Option[WalletPathPair], string] =

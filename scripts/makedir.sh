@@ -19,9 +19,9 @@ if [[ "${ON_WINDOWS}" == "1" ]]; then
   if [[ ! -d "$1" ]]; then
     # Create full path.
     mkdir -p "$1";
-    # Remove all inherited access from path $1 ACL and grant full access rights
+    # Remove all inherited ACEs from path $1 ACL and grant full access rights
     # to current user only in $1 ACL.
-    icacls "$1" /inheritance:r /grant:r $USERDOMAIN\\$USERNAME:\(OI\)\(CI\)\(F\)&>/dev/null;
+    icacls "$1" //Q //inheritance:r //grant:r $USERDOMAIN\\$USERNAME:\(OI\)\(CI\)\(F\);
   fi
 else
   # Create full path with proper permissions.

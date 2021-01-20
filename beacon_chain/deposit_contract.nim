@@ -195,7 +195,7 @@ proc main() {.async.} =
       seed,
       0, cfg.simulationDepositsCount,
       string cfg.outValidatorsDir,
-      string cfg.outSecretsDir)
+      {KeystoreFlags.NonInteractive, KeystoreFlags.InsecurePassword})
 
     if deposits.isErr:
       fatal "Failed to generate deposits", err = deposits.error

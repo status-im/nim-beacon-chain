@@ -296,9 +296,6 @@ const
 when libp2p_pki_schemes != "secp256k1":
   {.fatal: "Incorrect building process, please use -d:\"libp2p_pki_schemes=secp256k1\"".}
 
-const
-  NetworkInsecureKeyPassword = "INSECUREPASSWORD"
-
 template libp2pProtocol*(name: string, version: int) {.pragma.}
 
 func shortLog*(peer: Peer): string = shortLog(peer.info.peerId)
@@ -1400,48 +1397,34 @@ proc getPersistentNetKeys*(rng: var BrHmacDrbgContext,
           conf.dataDir / conf.netKeyFile
 
       if fileAccessible(keyPath, {AccessFlags.Find}):
-        info "Network key storage is present, unlocking", key_path = keyPath
-
-        # Insecure password used only for automated testing.
-        let insecurePassword =
-          if conf.netKeyInsecurePassword:
-            some(NetworkInsecureKeyPassword)
-          else:
-            none[string]()
-
-        let res = loadNetKeystore(keyPath, insecurePassword)
+        info "Network keystore is present, unlocking", key_path = keyPath
+        let res = loadNetKeystore(keyPath, conf.getNetKeystoreFlags())
         if res.isNone():
           fatal "Could not load network key file"
           quit QuitFailure
         let privKey = res.get()
         let pubKey = privKey.getKey().tryGet()
-        info "Network key storage was successfully unlocked",
+        info "Network keystore was successfully unlocked",
              key_path = keyPath, network_public_key = pubKey
         return KeyPair(seckey: privKey, pubkey: pubKey)
       else:
-        info "Network key storage is missing, creating a new one",
+        info "Network keystore is missing, creating a new one",
              key_path = keyPath
         let rres = PrivateKey.random(Secp256k1, rng)
         if rres.isErr():
-          fatal "Could not generate random network key file"
+          fatal "Could not generate random network key"
           quit QuitFailure
 
         let privKey = rres.get()
         let pubKey = privKey.getKey().tryGet()
 
-        # Insecure password used only for automated testing.
-        let insecurePassword =
-          if conf.netKeyInsecurePassword:
-            some(NetworkInsecureKeyPassword)
-          else:
-            none[string]()
-
-        let sres = saveNetKeystore(rng, keyPath, privKey, insecurePassword)
+        let sres = saveNetKeystore(rng, keyPath, privKey,
+                                   conf.getNetKeystoreFlags())
         if sres.isErr():
-          fatal "Could not create network key file", key_path = keyPath
+          fatal "Could not create network keystore file", key_path = keyPath
           quit QuitFailure
 
-        info "New network key storage was created", key_path = keyPath,
+        info "New network keystore was created", key_path = keyPath,
              network_public_key = pubKey
         return KeyPair(seckey: privKey, pubkey: pubKey)
 
@@ -1464,14 +1447,8 @@ proc getPersistentNetKeys*(rng: var BrHmacDrbgContext,
     let privKey = rres.get()
     let pubKey = privKey.getKey().tryGet()
 
-    # Insecure password used only for automated testing.
-    let insecurePassword =
-      if conf.netKeyInsecurePassword:
-        some(NetworkInsecureKeyPassword)
-      else:
-        none[string]()
-
-    let sres = saveNetKeystore(rng, keyPath, privKey, insecurePassword)
+    let sres = saveNetKeystore(rng, keyPath, privKey,
+                               conf.getNetKeystoreFlags())
     if sres.isErr():
       fatal "Could not create network key file", key_path = keyPath
       quit QuitFailure
