@@ -246,9 +246,6 @@ const
   SeenTableTimeReconnect* = 1.minutes
     ## Minimal time between disconnection and reconnection attempt
 
-  ResolvePeerTimeout* = 1.minutes
-    ## Maximum time allowed for peer resolve process.
-
 template neterr(kindParam: Eth2NetworkingErrorKind): auto =
   err(type(result), Eth2NetworkingError(kind: kindParam))
 
@@ -276,12 +273,6 @@ declareCounter nbc_successful_discoveries,
 
 declareCounter nbc_failed_discoveries,
   "Number of failed discoveries"
-
-const delayBuckets = [1.0, 5.0, 10.0, 20.0, 40.0, 60.0]
-
-declareHistogram nbc_resolve_time,
-  "Time(s) used while resolving peer information",
-   buckets = delayBuckets
 
 const
   snappy_implementation {.strdefine.} = "libp2p"
@@ -353,6 +344,9 @@ proc getFuture*(peer: Peer): Future[void] {.inline.} =
     peer.disconnectedFut = newFuture[void]("Peer.disconnectedFut")
   peer.disconnectedFut
 
+proc isAlive*(peer: Peer): bool =
+  peer.connectionState notin {Disconnecting, Disconnected}
+
 proc getScore*(a: Peer): int =
   ## Returns current score value for peer ``peer``.
   a.score
@@ -362,6 +356,43 @@ proc updateScore*(peer: Peer, score: int) {.inline.} =
   peer.score = peer.score + score
   if peer.score > PeerScoreHighLimit:
     peer.score = PeerScoreHighLimit
+
+proc join*(peer: Peer): Future[void] =
+  var retFuture = newFuture[void]("peer.lifetime.join")
+  let peerFut = peer.getFuture()
+
+  proc continuation(udata: pointer) {.gcsafe.} =
+    if not(retFuture.finished()):
+      retFuture.complete()
+
+  proc cancellation(udata: pointer) {.gcsafe.} =
+    if not(isNil(peerFut)):
+      peerFut.removeCallback(continuation)
+
+  if peerFut.finished():
+    # All the `peer.disconnectedFut` callbacks are already scheduled in current
+    # `poll()` call, to avoid race we going to finish only in next `poll()`
+    # call.
+    callSoon(continuation, cast[pointer](retFuture))
+  else:
+    # `peer.disconnectedFut` is not yet finished, but we want to be scheduled
+    # after all callbacks.
+    peerFut.addCallback(continuation)
+    retFuture.cancelCallback = cancellation
+
+  retFuture
+
+proc notifyAndWait*(network: ETh2Node, peer: Peer): Future[void] =
+  ## Notify all the waiters that peer life is finished and wait until all
+  ## callbacks will be processed.
+  let
+    joinFut = peer.join()
+    poolFut = network.peerPool.joinPeer(peer)
+    discFut = peer.disconnectedFut
+  peer.connectionState = Disconnecting
+  discFut.complete()
+  peer.disconnectedFut = nil
+  allFutures(joinFut, poolFut)
 
 proc calcThroughput(dur: Duration, value: uint64): float =
   let secs = float(chronos.seconds(1).nanoseconds)
@@ -948,17 +979,16 @@ proc resolvePeer(peer: Peer) =
       discard peer.info.peerId.extractPublicKey(key)
       keys.PublicKey.fromRaw(key.skkey.getBytes()).get().toNodeId()
 
-  debug "Peer's ENR recovery task started", node_id = $nodeId
-
   # This is "fast-path" for peers which was dialed. In this case discovery
   # already has most recent ENR information about this peer.
   let gnode = peer.network.discovery.getNode(nodeId)
   if gnode.isSome():
     peer.enr = some(gnode.get().record)
     inc(nbc_successful_discoveries)
-    let delay = now(chronos.Moment) - startTime
-    nbc_resolve_time.observe(delay.toFloatSeconds())
-    debug "Peer's ENR recovered", delay = $delay
+    debug "Peer's ENR recovered"
+  else:
+    inc(nbc_failed_discoveries)
+    debug "Peer's ENR could not be recovered"
 
 proc handlePeer*(peer: Peer) {.async.} =
   let res = peer.network.peerPool.addPeerNoWait(peer, peer.direction)
@@ -987,8 +1017,7 @@ proc handlePeer*(peer: Peer) {.async.} =
     # Peer was added to PeerPool.
     peer.score = NewPeerScore
     peer.connectionState = Connected
-    # We spawn task which will obtain ENR for this peer.
-    resolvePeer(peer)
+    peer.resolvePeer()
     debug "Peer successfully connected", peer = peer,
                                          connections = peer.connections
 
@@ -1055,10 +1084,8 @@ proc onConnEvent(node: Eth2Node, peerId: PeerID, event: ConnEvent) {.async.} =
       # Whatever caused disconnection, avoid connection spamming
       node.addSeen(peerId, SeenTableTimeReconnect)
 
-      let fut = peer.disconnectedFut
-      if not(isNil(fut)):
-        fut.complete()
-        peer.disconnectedFut = nil
+      if not(isNil(peer.disconnectedFut)):
+        await node.notifyAndWait(peer)
       else:
         # TODO (cheatfate): This could be removed when bug will be fixed inside
         # `nim-libp2p`.

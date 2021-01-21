@@ -25,6 +25,7 @@ type
     peerType: PeerType
     flags: set[PeerFlags]
     index: int
+    future: Future[void]
 
   PeerIndex = object
     data: int
@@ -301,6 +302,7 @@ proc deletePeer*[A, B](pool: PeerPool[A, B], peer: A, force = false): bool =
           dec(pool.curOutPeersCount)
           dec(pool.acqOutPeersCount)
 
+        let fut = item[].future
         # Indicate that we have an empty space
         pool.fireNotFullEvent(item[])
         # Cleanup storage with default item, and removing key from hashtable.
@@ -308,6 +310,8 @@ proc deletePeer*[A, B](pool: PeerPool[A, B], peer: A, force = false): bool =
         pool.registry.del(key)
         pool.peerDeleted(peer)
         pool.peerCountChanged()
+        # Indicate that peer was deleted
+        fut.complete()
     else:
       if item[].peerType == PeerType.Incoming:
         # If peer is available, then its copy present in heapqueue, so we need
@@ -326,6 +330,7 @@ proc deletePeer*[A, B](pool: PeerPool[A, B], peer: A, force = false): bool =
             break
         dec(pool.curOutPeersCount)
 
+      let fut = item[].future
       # Indicate that we have an empty space
       pool.fireNotFullEvent(item[])
       # Cleanup storage with default item, and removing key from hashtable.
@@ -333,17 +338,53 @@ proc deletePeer*[A, B](pool: PeerPool[A, B], peer: A, force = false): bool =
       pool.registry.del(key)
       pool.peerDeleted(peer)
       pool.peerCountChanged()
+      # Indicate that peer was deleted
+      fut.complete()
     true
   else:
     false
 
+proc joinPeer*[A, B](pool: PeerPool[A, B], peer: A): Future[void] =
+  ## This procedure will only when peer ``peer`` finally leaves PeerPool
+  ## ``pool``.
+  mixin getKey
+  var retFuture = newFuture[void]("peerpool.joinPeer")
+  var future: Future[void]
+
+  proc continuation(udata: pointer) {.gcsafe.} =
+    if not(retFuture.finished()):
+      retFuture.complete()
+
+  proc cancellation(udata: pointer) {.gcsafe.} =
+    if not(isNil(future)):
+      future.removeCallback(continuation)
+
+  let key = getKey(peer)
+  if pool.registry.hasKey(key):
+    let pindex = pool.registry[key].data
+    var item = addr(pool.storage[pindex])
+    future = item[].future
+    # If peer is still in PeerPool, then item[].future should not be finished.
+    doAssert(not(future.finished()))
+    future.addCallback(continuation)
+    retFuture.cancelCallback = cancellation
+  else:
+    # If there no such peer in PeerPool anymore, its possible that
+    # PeerItem.future's callbacks is not yet processed, so we going to complete
+    # retFuture only in next `poll()` call.
+    callSoon(continuation, cast[pointer](retFuture))
+
+  retFuture
+
 proc addPeerImpl[A, B](pool: PeerPool[A, B], peer: A, peerKey: B,
                        peerType: PeerType) =
+  mixin getFuture
   proc onPeerClosed(udata: pointer) {.gcsafe.} =
     discard pool.deletePeer(peer)
 
   let item = PeerItem[A](data: peer, peerType: peerType,
-                         index: len(pool.storage))
+                         index: len(pool.storage),
+                         future: newFuture[void]("peerpool.peer"))
   pool.storage.add(item)
   var pitem = addr(pool.storage[^1])
   let pindex = PeerIndex(data: item.index, cmp: pool.cmp)
@@ -367,13 +408,13 @@ proc checkPeer*[A, B](pool: PeerPool[A, B], peer: A): PeerStatus {.inline.} =
   ## * Peer's lifetime future is not finished yet - (PeerStatus.DeadPeerError)
   ##
   ## If peer could be added to PeerPool procedure returns (PeerStatus.Success)
-  mixin getKey, getFuture
+  mixin getKey, isAlive
   if not(pool.checkPeerScore(peer)):
     PeerStatus.LowScoreError
   else:
     let peerKey = getKey(peer)
     if not(pool.registry.hasKey(peerKey)):
-      if not(peer.getFuture().finished):
+      if peer.isAlive():
         PeerStatus.Success
       else:
         PeerStatus.DeadPeerError
@@ -393,7 +434,7 @@ proc addPeerNoWait*[A, B](pool: PeerPool[A, B],
   ##     (PeerStatus.NoSpaceError)
   ##
   ## Procedure returns (PeerStatus.Success) on success.
-  mixin getKey, getFuture
+  mixin getKey
   let res = pool.checkPeer(peer)
   if res != PeerStatus.Success:
     res
