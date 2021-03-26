@@ -412,9 +412,35 @@ func verifyFinalization(node: BeaconNode, slot: Slot) =
 
 proc installAttestationSubnetHandlers(node: BeaconNode, subnets: set[uint8]) =
   # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/p2p-interface.md#attestations-and-aggregation
-  # nimbus won't score attestation subnets for now, we just rely on block and aggregate which are more stabe and reliable
+  # properly applying parameters to subnets is hard and requires research and dynamic adjustments based on the number of validators
+  # for now the best and easiest strategy is to use some parameters, which is better then no parameters at all and so no scoring
+  # applying aggregate parameters seems to work the best, further research will be necessary
+  const
+    subnetsParams = TopicParams(
+      topicWeight: 0.01,
+      timeInMeshWeight: 0.03333333333333333,
+      timeInMeshQuantum: chronos.seconds(12),
+      timeInMeshCap: 300,
+      firstMessageDeliveriesWeight: 0.8611923631641919,
+      firstMessageDeliveriesDecay: 0.8659643233600653,
+      firstMessageDeliveriesCap: 46.44723027156447,
+      meshMessageDeliveriesWeight: -37.221277470375405,
+      meshMessageDeliveriesDecay: 0.9646616199111993,
+      meshMessageDeliveriesThreshold: 13.595606364013024,
+      meshMessageDeliveriesCap: 217.5297018242084,
+      meshMessageDeliveriesActivation: chronos.seconds(204),
+      meshMessageDeliveriesWindow: chronos.seconds(2),
+      meshFailurePenaltyWeight: -37.221277470375405,
+      meshFailurePenaltyDecay: 0.9646616199111993,
+      invalidMessageDeliveriesWeight: -6879.999999999998,
+      invalidMessageDeliveriesDecay: 0.9971259067705325
+    )
+
+  static:
+    subnetsParams.validateParameters().tryGet()
+
   for subnet in subnets:
-    node.network.subscribe(getAttestationTopic(node.forkDigest, subnet), TopicParams.init()) # don't score attestation subnets for now
+    node.network.subscribe(getAttestationTopic(node.forkDigest, subnet), subnetsParams) # don't score attestation subnets for now
 
 proc updateStabilitySubnetMetadata(
     node: BeaconNode, stabilitySubnets: set[uint8]) =

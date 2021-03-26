@@ -58,6 +58,7 @@ type
   Eth2Node* = ref object of RootObj
     switch*: Switch
     pubsub*: GossipSub
+    gossipBalancer*: Future[void]
     discovery*: Eth2DiscoveryProtocol
     discoveryEnabled*: bool
     wantedPeers*: int
@@ -268,6 +269,9 @@ declareCounter nbc_successful_discoveries,
 
 declareCounter nbc_failed_discoveries,
   "Number of failed discoveries"
+
+declareCounter nbc_gossip_kicked_peers,
+  "Number of peers kicked by nbc gossip balancer"
 
 const delayBuckets = [1.0, 5.0, 10.0, 20.0, 40.0, 60.0]
 
@@ -555,12 +559,15 @@ else:
 
 proc makeEth2Request(peer: Peer, protocolId: string, requestBytes: Bytes,
                      ResponseMsg: type,
-                     timeout: Duration): Future[NetRes[ResponseMsg]]
+                     timeout: Option[Duration]): Future[NetRes[ResponseMsg]]
                     {.async.} =
-  var deadline = sleepAsync timeout
+  let stream = if timeout.isSome():
+      var deadline = sleepAsync timeout.get()
+      awaitWithTimeout(peer.network.openStream(peer, protocolId), deadline):
+        return neterr StreamOpenTimeout
+    else:
+      await peer.network.openStream(peer, protocolId)
 
-  let stream = awaitWithTimeout(peer.network.openStream(peer, protocolId),
-                                deadline): return neterr StreamOpenTimeout
   try:
     # Send the request
     await stream.writeChunk(none ResponseCode, requestBytes)
@@ -632,7 +639,7 @@ proc implementSendProcBody(sendProc: SendProc) =
         let ResponseRecord = msg.response.recName
         quote:
           makeEth2Request(`peer`, `msgProto`, `bytes`,
-                          `ResponseRecord`, `timeoutVar`)
+                          `ResponseRecord`, some(`timeoutVar`))
       else:
         quote: sendNotificationMsg(`peer`, `msgProto`, `bytes`)
     else:
@@ -950,6 +957,106 @@ proc runDiscoveryLoop*(node: Eth2Node) {.async.} =
     # when no peers are in the routing table. Don't run it in continuous loop.
     await sleepAsync(1.seconds)
 
+proc runGossipBalanceLoop*(node: Eth2Node) {.async.} =
+  type
+    PeerData = object
+      id: PeerID
+      pub: PubsubPeer
+      eth: Peer
+      futureMeta: Future[NetRes[Eth2Metadata]]
+
+  proc cleanupPeer(id: PeerID) {.async.} =
+    # this is crude
+    # likely our discovery or so will try to reconnect to this peer
+    # we should blacklist them
+    try:
+      await node.switch.disconnect(id)
+      nbc_gossip_kicked_peers.inc()
+    except CancelledError:
+      raise
+    except CatchableError as exc:
+      trace "Failed to close connection", peer=id, error=exc.name, msg=exc.msg
+
+  var slowPeers: Table[PeerID, int]
+
+  while true:
+    try:
+      var peers: seq[PeerData]
+      for id, info in node.pubsub.peers:
+        var msgBytes: seq[byte]
+        let
+          epeer = node.getPeer(id)
+        peers &= PeerData(
+          id: id,
+          pub: info,
+          eth: epeer,
+          # skip macro usage, we need no timeout and no fuss too
+          # don't await here, just collect, should be NO THROW
+          # as pointed out by cheatfate this is not really safe
+          # nothing prevents multiple requests to happen
+          # and in fact some of the errors we have are likely that
+          futureMeta: makeEth2Request(
+            epeer,
+            "/eth2/beacon_chain/req/metadata/1/",
+            msgBytes,
+            Eth2Metadata,
+            Duration.none))
+
+      # wait all futures without throwing? hopefully
+      discard await allFinished(peers.mapIt(it.futureMeta)).withTimeout(10.seconds)
+
+      for i in countdown(peers.high, 0):
+        let data = peers[i]
+
+        if not data.futureMeta.finished():
+          # if the allfinished timed-out we might have such cases
+
+          # allow a few slow tries
+          let slowCount = slowPeers.getOrDefault(data.id)
+          if slowCount >= 5:
+            info "A peer was too slow to report its metadata", peer=data.id
+            asyncSpawn cleanupPeer(data.id)
+            slowPeers.del(data.id)
+          else:
+            slowPeers[data.id] = slowCount + 1
+
+          # we require cancelation
+          data.futureMeta.cancel()
+          peers.del(i) # remove tail and continue iter
+        else:
+          if data.futureMeta.failed():
+            info "A peer failed to report its metadata", peer=data.id
+            asyncSpawn cleanupPeer(data.id)
+            peers.del(i) # remove tail and continue iter
+          else:
+            let
+              fres = await data.futureMeta
+            if fres.isOk():
+              let
+                meta = fres.get()
+              info "Got metadata", meta, peer=data.id
+              var noSubnets = true
+              for subnet in 0'u8..(ATTESTATION_SUBNET_COUNT - 1'u8):
+              # for subnet in 0'u8 ..<ATTESTATION_SUBNET_COUNT: # compilation failed...
+                if meta.attnets[subnet]:
+                  noSubnets = false
+                  break
+              if noSubnets:
+                info "A peer had no subnets", peer=data.id
+                asyncSpawn cleanupPeer(data.id)
+                peers.del(i) # remove tail and continue iter
+            else:
+              info "A peer had errors", peer=data.id, error=fres.error()
+              asyncSpawn cleanupPeer(data.id)
+              peers.del(i) # remove tail and continue iter
+    except CancelledError:
+      raise
+    except CatchableError as e:
+      # if this happens we got issues likely at chronos/nim level
+      warn "Gossip balancer loop aborted with an error", name=e.name, msg=e.msg,trace=getStackTrace(e)
+
+    await sleepAsync(30.seconds)
+
 proc getPersistentNetMetadata*(config: BeaconNodeConf): Eth2Metadata =
   let metadataPath = config.dataDir / nodeMetadataFilename
   if not fileExists(metadataPath):
@@ -1197,9 +1304,14 @@ proc start*(node: Eth2Node) {.async.} =
         if pa.isOk():
           await node.connQueue.addLast(pa.get())
 
+  node.gossipBalancer = node.runGossipBalanceLoop()
+
 proc stop*(node: Eth2Node) {.async.} =
   # Ignore errors in futures, since we're shutting down (but log them on the
   # TRACE level, if a timeout is reached).
+
+  node.gossipBalancer.cancel()
+
   let
     waitedFutures = @[
       node.discovery.closeWait(),

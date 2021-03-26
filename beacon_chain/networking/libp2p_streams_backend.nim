@@ -155,7 +155,7 @@ proc readResponseChunk(conn: Connection, peer: Peer,
     return neterr UnexpectedEOF
 
 proc readResponse(conn: Connection, peer: Peer,
-                  MsgType: type, timeout: Duration): Future[NetRes[MsgType]] {.async.} =
+                  MsgType: type, timeout: Option[Duration]): Future[NetRes[MsgType]] {.async.} =
   when MsgType is seq:
     type E = ElemType(MsgType)
     var results: MsgType
@@ -167,9 +167,12 @@ proc readResponse(conn: Connection, peer: Peer,
       # poll loop that each future along the way causes.
       trace "reading chunk", conn
       let nextFut = conn.readResponseChunk(peer, E)
-      if not await nextFut.withTimeout(timeout):
-        return neterr(ReadResponseTimeout)
-      let nextRes = nextFut.read()
+      let nextRes = if timeout.isSome():
+          if not await nextFut.withTimeout(timeout.get()):
+            return neterr(ReadResponseTimeout)
+          nextFut.read()
+        else:
+          await nextFut
       if nextRes.isErr:
         if nextRes.error.kind == PotentiallyExpectedEOF:
           trace "EOF chunk", conn, err = nextRes.error
@@ -183,6 +186,10 @@ proc readResponse(conn: Connection, peer: Peer,
         results.add nextRes.value
   else:
     let nextFut = conn.readResponseChunk(peer, MsgType)
-    if not await nextFut.withTimeout(timeout):
-      return neterr(ReadResponseTimeout)
-    return nextFut.read()
+    if timeout.isSome():
+      if not await nextFut.withTimeout(timeout.get()):
+        return neterr(ReadResponseTimeout)
+      return nextFut.read()
+    else:
+      return await nextFut
+
