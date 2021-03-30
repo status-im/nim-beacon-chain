@@ -74,6 +74,8 @@ type
     # ----------------------------------------------------------------
     quarantine*: QuarantineRef
 
+    trackedAttestations*: seq[tuple[validator: ValidatorPubKey, slot: Slot]]
+
 # Initialization
 # ------------------------------------------------------------------------------
 

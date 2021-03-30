@@ -456,6 +456,7 @@ proc handleAttestations(node: BeaconNode, head: BlockRef, slot: Slot) =
       traceAsyncErrors createAndSendAttestation(
         node, fork, genesis_validators_root, a.validator, a.data,
         a.committeeLen, a.indexInCommittee, num_active_validators)
+      node.processor.trackedAttestations.add((a.validator.pubkey, slot))
     else:
       warn "Slashing protection activated for attestation",
         validator = a.validator.pubkey,
