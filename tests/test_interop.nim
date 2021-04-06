@@ -137,31 +137,3 @@ suite "Interop":
       check:
         # TODO re-enable
         true or dep.sig == computed_sig.toValidatorSig()
-
-  test "Interop genesis":
-    # Check against https://github.com/protolambda/zcli:
-    # zcli keys generate --to 64 | zcli genesis mock --genesis-time 1570500000 > /tmp/state.ssz
-    # zcli hash-tree-root state /tmp/state.ssz
-    var deposits: seq[DepositData]
-
-    for i in 0..<64:
-      let privKey = makeInteropPrivKey(i)
-      deposits.add makeDeposit(defaultRuntimePreset, privKey.toPubKey(), privKey)
-
-    const genesis_time = 1570500000
-    var
-      initialState = initialize_beacon_state_from_eth1(
-        defaultRuntimePreset, eth1BlockHash, genesis_time, deposits, {})
-
-    # https://github.com/ethereum/eth2.0-pm/tree/6e41fcf383ebeb5125938850d8e9b4e9888389b4/interop/mocked_start#create-genesis-state
-    initialState.genesis_time = genesis_time
-
-    let expected =
-      when const_preset == "minimal":
-        "051d1a9c0fb61fce627e3990b930791fd17cb9fa7fb84a9a0051e55bf1759ec8"
-      elif const_preset == "mainnet":
-        "07358d9660c0534e0055201084f6ddd13d418193ec48a451b572cfe2ee6a35c6"
-      else:
-        "unimplemented"
-    check:
-      hash_tree_root(initialState[]).data.toHex() == expected

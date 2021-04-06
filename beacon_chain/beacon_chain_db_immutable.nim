@@ -18,7 +18,7 @@ import
 
 type
   # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#beaconstate
-  # Memory-representation-equivalent to a v1.0.1 BeaconState for in-place SSZ reading and writing
+  # https://github.com/ethereum/eth2.0-specs/blob/eca6bd7d622a0cfb7343bff742da046ed25b3825/specs/merge/beacon-chain.md#beaconstate
   BeaconStateNoImmutableValidators* = object
     # Versioning
     genesis_time*: uint64
@@ -70,6 +70,10 @@ type
 
     current_justified_checkpoint*: Checkpoint
     finalized_checkpoint*: Checkpoint
+
+    # Application-layer
+    application_state_root*: Eth2Digest # [New in Merge]
+    application_block_hash*: Eth2Digest # [New in Merge]
 
 func getSizeofSig(x: auto, n: int = 0): seq[(string, int, int)] =
   for name, value in x.fieldPairs:

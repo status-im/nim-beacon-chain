@@ -177,7 +177,6 @@ OK: 1/1 Fail: 0/1 Skip: 0/1
 OK: 3/3 Fail: 0/3 Skip: 0/3
 ## Interop
 ```diff
-+ Interop genesis                                                                            OK
 + Interop signatures                                                                         OK
 + Mocked start private key                                                                   OK
 ```

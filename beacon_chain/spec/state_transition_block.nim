@@ -335,7 +335,52 @@ proc process_operations(preset: RuntimePreset,
 
   ok()
 
+# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#is_transition_completed
+func is_transition_completed(state: BeaconState): bool =
+  # doAssert state.application_block_hash != default(Eth2Digest)
+  true  # stub, assume post-transition
+
+# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#is_transition_block
+func is_transition_block(
+    state: BeaconState, block_body: SomeBeaconBlockBody): bool =
+  state.application_block_hash == default(Eth2Digest) and
+    block_body.application_payload.block_hash != default(Eth2Digest)
+
+# https://github.com/ethereum/eth2.0-specs/blob/eca6bd7d622a0cfb7343bff742da046ed25b3825/specs/merge/beacon-chain.md#get_application_state
+func get_application_state(application_state_root: Eth2Digest): ApplicationState =
+  # TODO
+  discard
+
+# https://github.com/ethereum/eth2.0-specs/blob/eca6bd7d622a0cfb7343bff742da046ed25b3825/specs/merge/beacon-chain.md#application_state_transition
+func application_state_transition(
+    application_state: ApplicationState, application_payload: ApplicationPayload) =
+  # TODO
+  discard
+
+# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#process_application_payload
+func process_application_payload(
+    state: var BeaconState, body: SomeBeaconBlockBody) =
+  # Note: This function is designed to be able to be run in parallel with the
+  # other `process_block` sub-functions
+
+  # pinned on, so no error conditions for now
+  doAssert is_transition_completed(state)
+
+  if is_transition_completed(state):
+    let application_state = get_application_state(state.application_state_root)
+    application_state_transition(application_state, body.application_payload)
+
+    state.application_state_root = body.application_payload.state_root
+    state.application_block_hash = body.application_payload.block_hash
+  elif is_transition_block(state, body):
+    doAssert body.application_payload ==
+      ApplicationPayload(block_hash: body.application_payload.block_hash)
+    state.application_block_hash = body.application_payload.block_hash
+  else:
+    doAssert body.application_payload == ApplicationPayload()
+
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#block-processing
+# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#block-processing
 proc process_block*(
     preset: RuntimePreset,
     state: var BeaconState, blck: SomeBeaconBlock, flags: UpdateFlags,
@@ -348,5 +393,7 @@ proc process_block*(
   ? process_randao(state, blck.body, flags, cache)
   ? process_eth1_data(state, blck.body)
   ? process_operations(preset, state, blck.body, flags, cache)
+
+  process_application_payload(state, blck.body)  # [New in Merge]
 
   ok()
