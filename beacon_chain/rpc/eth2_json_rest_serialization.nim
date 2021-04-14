@@ -257,16 +257,16 @@ proc writeValue*(writer: var JsonWriter[RestJson], value: Eth2Digest) {.
      raises: [IOError, Defect].} =
   writeValue(writer, hexOriginal(value.data))
 
-## BloomLogs
-proc readValue*(reader: var JsonReader[RestJson], value: var BloomLogs) {.
+## EthAddress
+proc readValue*(reader: var JsonReader[RestJson], value: var EthAddress) {.
      raises: [IOError, SerializationError, Defect].} =
   try:
     hexToByteArray(reader.readValue(string), value.data)
   except ValueError:
     raiseUnexpectedValue(reader,
-                         "BloomLogs value should be a valid hex string")
+                         "EthAddress value should be a valid hex string")
 
-proc writeValue*(writer: var JsonWriter[RestJson], value: BloomLogs) {.
+proc writeValue*(writer: var JsonWriter[RestJson], value: EthAddress) {.
      raises: [IOError, Defect].} =
   writeValue(writer, hexOriginal(value.data))
 
