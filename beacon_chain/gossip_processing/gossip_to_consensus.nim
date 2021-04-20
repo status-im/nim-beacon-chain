@@ -13,7 +13,10 @@ import
   ../consensus_object_pools/[block_clearance, blockchain_dag, attestation_pool],
   ./consensus_manager,
   ".."/[beacon_clock, beacon_node_types],
-  ../ssz/sszdump
+  ../ssz/sszdump,
+  ../eth1/eth1_monitor
+
+from times import getTime, toUnix
 
 # Gossip Queue Manager
 # ------------------------------------------------------------------------------
@@ -73,7 +76,7 @@ type
     # Consumer
     # ----------------------------------------------------------------
     consensusManager: ref ConsensusManager
-      ## Blockchain DAG, AttestationPool and Quarantine
+      ## Blockchain DAG, AttestationPool, Quarantine, and Eth1Manager
 
 {.push raises: [Defect].}
 
@@ -227,14 +230,17 @@ proc processBlock(self: var VerifQueueManager, entry: BlockEntry) =
 
     if entry.v.resFut != nil:
       entry.v.resFut.complete(Result[void, BlockError].ok())
+    true
   elif res.error() in {BlockError.Duplicate, BlockError.Old}:
     # These are harmless / valid outcomes - for the purpose of scoring peers,
     # they are ok
     if entry.v.resFut != nil:
       entry.v.resFut.complete(Result[void, BlockError].ok())
+    false
   else:
     if entry.v.resFut != nil:
       entry.v.resFut.complete(Result[void, BlockError].err(res.error()))
+    false
 
 proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
   while true:
@@ -252,3 +258,15 @@ proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
     discard await idleAsync().withTimeout(idleTimeout)
 
     self[].processBlock(await self[].blocksQueue.popFirst())
+    when false: #if pB:
+        # https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec states that
+        # this timestamp is the unix timestamp of a new block. getTime's int64,
+        # but not negative, so this type conversion is safe.
+        # TODO make sure this doesn't increase latency unduly. it's not as bad,
+        # since blocks are the most important thing already, and the awaits are
+        # ordered, but worth checking.
+        let curTime = toUnix(getTime())
+        doAssert curTime >= 0
+        let executableBlock = await eth1Monitor.assembleBlock(
+          blck.v.blk.message.parent_root, curTime.uint64)
+        discard await eth1Monitor.newBlock(executableBlock)

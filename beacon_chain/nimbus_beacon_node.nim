@@ -337,7 +337,7 @@ proc init*(T: type BeaconNode,
     validatorPool = newClone(ValidatorPool.init(slashingProtectionDB))
 
     consensusManager = ConsensusManager.new(
-      chainDag, attestationPool, quarantine
+      chainDag, attestationPool, quarantine, eth1Monitor
     )
     verifQueues = VerifQueueManager.new(
       config.dumpEnabled, config.dumpDirInvalid, config.dumpDirIncoming,

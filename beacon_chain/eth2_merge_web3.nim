@@ -1,14 +1,11 @@
 # Keep changes in one repo
 
 import
+  strutils,
   json_serialization/std/[options, sets, net], serialization/errors,
-  ./spec/[
-    datatypes, digest, crypto, eth2_apis/beacon_rpc_client]
-
-import json_rpc/client, strutils
-import json_rpc/jsonmarshal
-import web3
-import spec/datatypes
+  ./spec/[datatypes, digest, crypto, eth2_apis/beacon_rpc_client],
+  json_rpc/[client, jsonmarshal],
+  web3
 
 from os import DirSep, AltSep
 template sourceDir: string = currentSourcePath.rsplit({DirSep, AltSep}, 1)[0]

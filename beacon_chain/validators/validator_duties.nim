@@ -34,6 +34,8 @@ import
   ./validator_pool, ./keystore_management,
   ../gossip_processing/consensus_manager
 
+from times import getTime, toUnix
+
 # Metrics for tracking attestation and beacon block loss
 const delayBuckets = [-Inf, -4.0, -2.0, -1.0, -0.5, -0.1, -0.05,
                       0.05, 0.1, 0.5, 1.0, 2.0, 4.0, 8.0, Inf]
@@ -412,6 +414,15 @@ proc proposeBlock(node: BeaconNode,
 
   newBlock.signature = await validator.signBlockProposal(
     fork, genesis_validators_root, slot, newBlock.root)
+
+  # https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec suggests that
+  # current time is currect here.
+  if not node.eth1Monitor.isNil:
+    let curTime = toUnix(getTime())
+    doAssert curTime >= 0
+    let executableBlock = await node.eth1Monitor.assembleBlock(
+      newBlock.message.parent_root, curTime.uint64)
+    discard await node.eth1Monitor.newBlock(executableBlock)
 
   return node.proposeSignedBlock(head, validator, newBlock)
 
