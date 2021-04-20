@@ -437,6 +437,20 @@ proc newBlock*(p: Web3DataProviderRef,
     transactions: List[string, MAX_EXECUTION_TRANSACTIONS].init(
       mapIt(executableData.transactions, it.encodeOpaqueTransaction))))
 
+proc assembleBlock*(m: Eth1Monitor,
+                    parentHash: Eth2Digest,
+                    timestamp: uint64): Future[ApplicationPayload] =
+  if m.dataProvider.isNil:
+    return
+  m.dataProvider[].web3.provider.consensus_assembleBlock(
+    BlockParams(parentHash: parentHash, timestamp: timestamp))
+
+proc newBlock*(m: Eth1Monitor,
+               executableData: ApplicationPayload): Future[bool] =
+  if m.dataProvider.isNil:
+    return
+  m.dataProvider[].web3.provider.consensus_newBlock(executableData)
+
 template readJsonField(j: JsonNode, fieldName: string, ValueType: type): untyped =
   var res: ValueType
   fromJson(j[fieldName], fieldName, res)
