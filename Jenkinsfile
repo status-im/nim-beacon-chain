@@ -35,8 +35,8 @@ def runStages() {
 		stage("Tools") {
 			sh """#!/bin/bash
 			set -e
-			make -j${env.NPROC}
-			make -j${env.NPROC} LOG_LEVEL=TRACE NIMFLAGS='-d:testnet_servers_image' nimbus_beacon_node
+			make -j${env.NPROC} V=1 NIMFLAGS='--listCmd'
+			make -j${env.NPROC} V=1 LOG_LEVEL=TRACE NIMFLAGS='-d:testnet_servers_image --listCmd' nimbus_beacon_node
 			"""
 		}
 
