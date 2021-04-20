@@ -204,7 +204,7 @@ if [[ "$ENABLE_LOGTRACE" == "1" ]]; then
   BINARIES="${BINARIES} logtrace"
 fi
 NETWORK_NIM_FLAGS=$(scripts/load-testnet-nim-flags.sh "${NETWORK}")
-$MAKE -j ${NPROC} LOG_LEVEL="${LOG_LEVEL}" NIMFLAGS="${NIMFLAGS} -d:testnet_servers_image -d:local_testnet ${NETWORK_NIM_FLAGS}" ${BINARIES}
+$MAKE -j ${NPROC} V=1 LOG_LEVEL="${LOG_LEVEL}" NIMFLAGS="${NIMFLAGS} -d:testnet_servers_image -d:local_testnet ${NETWORK_NIM_FLAGS}" ${BINARIES}
 
 PIDS=""
 WEB3_ARG=""
