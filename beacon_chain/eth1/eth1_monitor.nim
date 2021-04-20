@@ -22,6 +22,8 @@ import
   ".."/[beacon_chain_db, beacon_node_status],
   ./merkle_minimal
 
+import ../eth2_merge_web3.nim
+
 export
   web3Types
 

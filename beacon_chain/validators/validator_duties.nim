@@ -704,6 +704,7 @@ proc handleValidatorDuties*(node: BeaconNode, lastSlot, slot: Slot) {.async.} =
 
     # Time passed - we might need to select a new head in that case
     node.consensusManager[].updateHead(slot)
+    discard await node.eth1Monitor.setHead(head.root)
     head = node.chainDag.head
 
   handleAttestations(node, head, slot)
