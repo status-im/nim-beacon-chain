@@ -703,9 +703,11 @@ proc handleValidatorDuties*(node: BeaconNode, lastSlot, slot: Slot) {.async.} =
         await sleepAsync(afterBlockCutoff.offset)
 
     # Time passed - we might need to select a new head in that case
+    let oldHead = node.chainDag.head
     node.consensusManager[].updateHead(slot)
-    discard await node.eth1Monitor.setHead(head.root)
     head = node.chainDag.head
+    if (not node.eth1Monitor.isNil) and oldHead != head:
+      discard await node.eth1Monitor.setHead(head.root)
 
   handleAttestations(node, head, slot)
 
