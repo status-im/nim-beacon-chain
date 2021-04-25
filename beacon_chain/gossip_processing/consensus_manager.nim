@@ -33,7 +33,7 @@ type
 
     # Eth1 integration for merge
     # ----------------------------------------------------------------
-    eth1Monitor*: Eth1Monitor
+    web3Provider*: Web3DataProviderRef
 
 # Initialization
 # ------------------------------------------------------------------------------
@@ -42,13 +42,13 @@ proc new*(T: type ConsensusManager,
           chainDag: ChainDAGRef,
           attestationPool: ref AttestationPool,
           quarantine: QuarantineRef,
-          eth1Monitor: Eth1Monitor
+          web3Provider: Web3DataProviderRef
          ): ref ConsensusManager =
   (ref ConsensusManager)(
     chainDag: chainDag,
     attestationPool: attestationPool,
     quarantine: quarantine,
-    eth1Monitor: eth1Monitor
+    web3Provider: web3Provider
   )
 
 # Consensus Management

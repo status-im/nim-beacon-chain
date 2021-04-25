@@ -349,7 +349,7 @@ type
     deposits*: List[Deposit, Limit MAX_DEPOSITS]
     voluntary_exits*: List[SignedVoluntaryExit, Limit MAX_VOLUNTARY_EXITS]
 
-    application_payload*: ApplicationPayload  # [New in Merge] application payload
+    execution_payload*: ExecutionPayload  # [New in Merge]
 
   SigVerifiedBeaconBlockBody* = object
     ## A BeaconBlock body with signatures verified
@@ -374,7 +374,7 @@ type
     deposits*: List[Deposit, Limit MAX_DEPOSITS]
     voluntary_exits*: List[TrustedSignedVoluntaryExit, Limit MAX_VOLUNTARY_EXITS]
 
-    application_payload*: ApplicationPayload  # [New in Merge] application payload
+    execution_payload*: ExecutionPayload  # [New in Merge]
 
   TrustedBeaconBlockBody* = object
     ## A full verified block
@@ -389,7 +389,7 @@ type
     deposits*: List[Deposit, Limit MAX_DEPOSITS]
     voluntary_exits*: List[TrustedSignedVoluntaryExit, Limit MAX_VOLUNTARY_EXITS]
 
-    application_payload*: ApplicationPayload  # [New in Merge] application payload
+    execution_payload*: ExecutionPayload  # [New in Merge]
 
   SomeSignedBeaconBlock* = SignedBeaconBlock | SigVerifiedSignedBeaconBlock | TrustedSignedBeaconBlock
   SomeBeaconBlock* = BeaconBlock | SigVerifiedBeaconBlock | TrustedBeaconBlock
@@ -400,6 +400,20 @@ type
   SomeAttesterSlashing* = AttesterSlashing | TrustedAttesterSlashing
   SomeSignedBeaconBlockHeader* = SignedBeaconBlockHeader | TrustedSignedBeaconBlockHeader
   SomeSignedVoluntaryExit* = SignedVoluntaryExit | TrustedSignedVoluntaryExit
+
+  # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#executionpayloadheader
+  ExecutionPayloadHeader* = object
+    block_hash*: Eth2Digest  # Hash of execution block
+    parent_hash*: Eth2Digest
+    coinbase*: EthAddress
+    state_root*: Eth2Digest
+    number*: uint64
+    gas_limit*: uint64
+    gas_used*: uint64
+    timestamp*: uint64
+    receipt_root*: Eth2Digest
+    logs_bloom*: BloomLogs
+    transactions_root*: Eth2Digest
 
   # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#beaconstate
   # https://github.com/ethereum/eth2.0-specs/blob/eca6bd7d622a0cfb7343bff742da046ed25b3825/specs/merge/beacon-chain.md#beaconstate
@@ -455,9 +469,8 @@ type
     current_justified_checkpoint*: Checkpoint
     finalized_checkpoint*: Checkpoint
 
-    # Application-layer
-    application_state_root*: Eth2Digest # [New in Merge]
-    application_block_hash*: Eth2Digest # [New in Merge]
+    # Execution-layer
+    latest_execution_payload_header*: ExecutionPayloadHeader  # [New in Merge]
 
   # TODO Careful, not nil analysis is broken / incomplete and the semantics will
   #      likely change in future versions of the language:

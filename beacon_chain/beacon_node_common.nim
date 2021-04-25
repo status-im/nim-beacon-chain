@@ -60,6 +60,7 @@ type
     verifQueues*: ref VerifQueueManager
     consensusManager*: ref ConsensusManager
     attachedValidatorBalanceTotal*: uint64
+    web3Provider*: Web3DataProviderRef
 
 const
   MaxEmptySlotCount* = uint64(10*60) div SECONDS_PER_SLOT

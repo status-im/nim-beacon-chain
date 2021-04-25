@@ -270,12 +270,12 @@ proc writeValue*(writer: var JsonWriter[RestJson], value: BloomLogs) {.
      raises: [IOError, Defect].} =
   writeValue(writer, hexOriginal(value.data))
 
-## Eth1TransactionInput
-proc readValue*(reader: var JsonReader[RestJson], value: var Eth1TransactionInput) {.
+## OpaqueTransaction
+proc readValue*(reader: var JsonReader[RestJson], value: var OpaqueTransaction) {.
      raises: [IOError, SerializationError, Defect].} =
   readValue(reader, value)
 
-proc writeValue*(writer: var JsonWriter[RestJson], value: Eth1TransactionInput) {.
+proc writeValue*(writer: var JsonWriter[RestJson], value: OpaqueTransaction) {.
      raises: [IOError, Defect].} =
   writeValue(writer, value)
 

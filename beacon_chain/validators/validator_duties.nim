@@ -417,12 +417,14 @@ proc proposeBlock(node: BeaconNode,
 
   # https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec suggests that
   # current time is currect here.
-  if not node.eth1Monitor.isNil:
-    let curTime = toUnix(getTime())
-    doAssert curTime >= 0
-    let executableBlock = await node.eth1Monitor.assembleBlock(
-      newBlock.message.parent_root, curTime.uint64)
-    discard await node.eth1Monitor.newBlock(executableBlock)
+  let curTime = toUnix(getTime())
+  doAssert curTime >= 0
+  let executableBlock = await node.web3Provider.assembleBlock(
+    newBlock.message.parent_root, curTime.uint64)
+  info "calling RPC newBlock",
+    parent_root = newBlock.message.parent_root,
+    curTime
+  doAssert await node.web3Provider.newBlock(executableBlock)
 
   return node.proposeSignedBlock(head, validator, newBlock)
 
@@ -717,8 +719,10 @@ proc handleValidatorDuties*(node: BeaconNode, lastSlot, slot: Slot) {.async.} =
     let oldHead = node.chainDag.head
     node.consensusManager[].updateHead(slot)
     head = node.chainDag.head
-    if (not node.eth1Monitor.isNil) and oldHead != head:
-      discard await node.eth1Monitor.setHead(head.root)
+    if oldHead != head:
+      info "calling RPC node.eth1Monitor.setHead",
+        head = head.root
+      doAssert await node.web3Provider.setHead(head.root)
 
   handleAttestations(node, head, slot)
 

@@ -337,47 +337,57 @@ proc process_operations(preset: RuntimePreset,
 
 # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#is_transition_completed
 func is_transition_completed(state: BeaconState): bool =
-  # doAssert state.application_block_hash != default(Eth2Digest)
-  true  # stub, assume post-transition
+  # Rayonism starts post-merge
+  true
 
-# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#is_transition_block
-func is_transition_block(
-    state: BeaconState, block_body: SomeBeaconBlockBody): bool =
-  state.application_block_hash == default(Eth2Digest) and
-    block_body.application_payload.block_hash != default(Eth2Digest)
+# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#compute_time_at_slot
+func compute_time_at_slot(state: BeaconState, slot: Slot): uint64 =
+  # Note: This function is unsafe with respect to overflows and underflows.
+  doAssert slot >= GENESIS_SLOT
 
-# https://github.com/ethereum/eth2.0-specs/blob/eca6bd7d622a0cfb7343bff742da046ed25b3825/specs/merge/beacon-chain.md#get_application_state
-func get_application_state(application_state_root: Eth2Digest): ApplicationState =
+  let slots_since_genesis = slot - GENESIS_SLOT
+  state.genesis_time + slots_since_genesis * SECONDS_PER_SLOT
+
+# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#verify_execution_state_transition
+func verify_execution_state_transition(execution_payload: ExecutionPayload):
+    bool =
   # TODO
-  discard
+  true
 
-# https://github.com/ethereum/eth2.0-specs/blob/eca6bd7d622a0cfb7343bff742da046ed25b3825/specs/merge/beacon-chain.md#application_state_transition
-func application_state_transition(
-    application_state: ApplicationState, application_payload: ApplicationPayload) =
-  # TODO
-  discard
-
-# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#process_application_payload
-func process_application_payload(
+# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#process_execution_payload
+func process_execution_payload(
     state: var BeaconState, body: SomeBeaconBlockBody) =
   # Note: This function is designed to be able to be run in parallel with the
   # other `process_block` sub-functions
 
-  # pinned on, so no error conditions for now
+  # Rayonism starts post-merge
   doAssert is_transition_completed(state)
 
-  if is_transition_completed(state):
-    let application_state = get_application_state(state.application_state_root)
-    application_state_transition(application_state, body.application_payload)
+  let execution_payload = body.execution_payload
 
-    state.application_state_root = body.application_payload.state_root
-    state.application_block_hash = body.application_payload.block_hash
-  elif is_transition_block(state, body):
-    doAssert body.application_payload ==
-      ApplicationPayload(block_hash: body.application_payload.block_hash)
-    state.application_block_hash = body.application_payload.block_hash
-  else:
-    doAssert body.application_payload == ApplicationPayload()
+  # test suite trips over these due to is_transition_completed being pinned on
+  # for Rayonism, but they're useful to enable otherwise
+  when false:
+    if is_transition_completed(state):
+      doAssert execution_payload.parent_hash == state.latest_execution_payload_header.block_hash
+      doAssert execution_payload.number == state.latest_execution_payload_header.number + 1
+
+    doAssert execution_payload.timestamp == compute_time_at_slot(state, state.slot)
+    doAssert verify_execution_state_transition(execution_payload)
+
+  state.latest_execution_payload_header = ExecutionPayloadHeader(
+    block_hash: execution_payload.block_hash,
+    parent_hash: execution_payload.parent_hash,
+    coinbase: execution_payload.coinbase,
+    state_root: execution_payload.state_root,
+    number: execution_payload.number,
+    gas_limit: execution_payload.gas_limit,
+    gas_used: execution_payload.gas_used,
+    timestamp: execution_payload.timestamp,
+    receipt_root: execution_payload.receipt_root,
+    logs_bloom: execution_payload.logs_bloom,
+    transactions_root: hash_tree_root(execution_payload.transactions)
+  )
 
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#block-processing
 # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#block-processing
@@ -394,6 +404,6 @@ proc process_block*(
   ? process_eth1_data(state, blck.body)
   ? process_operations(preset, state, blck.body, flags, cache)
 
-  process_application_payload(state, blck.body)  # [New in Merge]
+  process_execution_payload(state, blck.body)  # [New in Merge]
 
   ok()

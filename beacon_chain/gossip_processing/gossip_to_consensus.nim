@@ -267,6 +267,6 @@ proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
         # ordered, but worth checking.
         let curTime = toUnix(getTime())
         doAssert curTime >= 0
-        let executableBlock = await eth1Monitor.assembleBlock(
+        let executableBlock = await web3Provider.assembleBlock(
           blck.v.blk.message.parent_root, curTime.uint64)
-        discard await eth1Monitor.newBlock(executableBlock)
+        discard await web3Provider.newBlock(executableBlock)
