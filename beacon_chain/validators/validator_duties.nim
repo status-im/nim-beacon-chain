@@ -415,13 +415,17 @@ proc proposeBlock(node: BeaconNode,
   newBlock.signature = await validator.signBlockProposal(
     fork, genesis_validators_root, slot, newBlock.root)
 
-  # https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec suggests that
-  # current time is currect here.
+  # TODO getTime() isn't correct; it's slot time
+  # TODO factor this out using
+  # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/validator.md#produce_execution_payload
+  # def get_execution_payload(state: BeaconState) -> ExecutionPayload:
   let curTime = toUnix(getTime())
-  doAssert curTime >= 0
+  info "FOO2: calling RPC assembleBlockfrom proposeBlock",
+    parent_root = newBlock.message.parent_root,
+    curTime
   let executableBlock = await node.web3Provider.assembleBlock(
     newBlock.message.parent_root, curTime.uint64)
-  info "calling RPC newBlock",
+  info "FOO3: calling RPC newBlock from proposeBlock",
     parent_root = newBlock.message.parent_root,
     curTime
   doAssert await node.web3Provider.newBlock(executableBlock)

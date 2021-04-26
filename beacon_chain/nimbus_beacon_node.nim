@@ -336,7 +336,8 @@ proc init*(T: type BeaconNode,
           config.validatorsDir(), SlashingDbName)
     validatorPool = newClone(ValidatorPool.init(slashingProtectionDB))
 
-    web3Provider =  waitFor newWeb3DataProvider(depositContractAddress, config.web3Urls[0]) # TODO waitFor etc
+    # TODO waitFor etc. This is temporary init code, so fine for now
+    web3Provider =  waitFor newWeb3DataProvider(depositContractAddress, config.web3Urls[0])
 
     consensusManager = ConsensusManager.new(
       chainDag, attestationPool, quarantine, web3Provider.get
@@ -377,6 +378,7 @@ proc init*(T: type BeaconNode,
     verifQueues: verifQueues,
     consensusManager: consensusManager,
     requestManager: RequestManager.init(network, verifQueues),
+    #earlyBlockHash: (waitFor web3Provider.get.getEarliestBlock()).hash
     web3Provider: web3Provider.get
   )
 

@@ -24,6 +24,7 @@ import
 
 import ../eth2_merge_web3.nim
 import web3/ethhexstrings
+import stew/byteutils
 
 export
   web3Types
@@ -438,17 +439,9 @@ proc newBlock*(p: Web3DataProviderRef,
     transactions: List[string, MAX_EXECUTION_TRANSACTIONS].init(
       mapIt(executableData.transactions, it.encodeOpaqueTransaction))))
 
-proc assembleBlock*(p: Web3DataProviderRef,
-                    parentHash: Eth2Digest,
-                    timestamp: uint64): Future[ExecutionPayload] =
-  let ts = encodeQuantity(timestamp)
-  info "FOO1 assembleBlock", parentHash, ts
-  p.web3.provider.consensus_assembleBlock(
-    BlockParams(parentHash: parentHash, timestamp: ts))
-
-proc newBlock*(p: Web3DataProviderRef,
-               executableData: ExecutionPayload): Future[bool] =
-  p.web3.provider.consensus_newBlock(executableData)
+proc getEarliestBlock*(p: Web3DataProviderRef): Future[BlockObject] =
+  # mostly want the hash field
+  p.web3.provider.eth_getBlockByNumber(blockId("earliest"), true)
 
 template readJsonField(j: JsonNode, fieldName: string, ValueType: type): untyped =
   var res: ValueType
@@ -801,9 +794,6 @@ proc new(T: type Web3DataProvider,
 # route around eth1 monitor initialization gating; intentionally a bit clunky
 proc newWeb3DataProvider*(depositContractAddress: Eth1Address, web3Url: string):
     Future[Result[Web3DataProviderRef, string]]=
-  info "FOO9",
-    depositContractAddress,
-    web3Url
   return Web3DataProvider.new(depositContractAddress, web3Url)
 
 proc putInitialDepositContractSnapshot*(db: BeaconChainDB,

@@ -327,6 +327,13 @@ proc initialize_beacon_state_from_eth1*(
   # Set genesis validators root for domain separation and chain versioning
   state.genesis_validators_root = hash_tree_root(state.validators)
 
+  # Hardcoded for Geth catalyst configuration for Rayonism test
+  # TODO either pull this in via getBlockByNumber() or at least
+  # doAssert-check for when it's not true (e.g., the Catalyst's
+  # genesis configuration's changed, or it's a testnet)
+  state.latest_execution_payload_header.block_hash =
+    Eth2Digest.fromHex("0x3a3fdfc9ab6e17ff530b57bc21494da3848ebbeaf9343545fded7a18d221ffec")
+
   state
 
 proc initialize_hashed_beacon_state_from_eth1*(

@@ -265,8 +265,11 @@ proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
         # TODO make sure this doesn't increase latency unduly. it's not as bad,
         # since blocks are the most important thing already, and the awaits are
         # ordered, but worth checking.
+        # TODO getTime() isn't correct; it's slot time
         let curTime = toUnix(getTime())
-        doAssert curTime >= 0
+        info "FOO4: calling web3Provider.assembleBlock from runQueueProcessingLoop",
+          parent_root = blck.v.blk.message.parent_root,
+          curTime
         let executableBlock = await web3Provider.assembleBlock(
           blck.v.blk.message.parent_root, curTime.uint64)
         discard await web3Provider.newBlock(executableBlock)

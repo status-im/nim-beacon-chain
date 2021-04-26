@@ -341,8 +341,9 @@ func is_transition_completed(state: BeaconState): bool =
   true
 
 # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#compute_time_at_slot
-func compute_time_at_slot(state: BeaconState, slot: Slot): uint64 =
+func compute_time_at_slot*(state: BeaconState, slot: Slot): uint64 =
   # Note: This function is unsafe with respect to overflows and underflows.
+  # TODO check against function by same name in eth1monitor
   doAssert slot >= GENESIS_SLOT
 
   let slots_since_genesis = slot - GENESIS_SLOT
@@ -355,7 +356,8 @@ func verify_execution_state_transition(execution_payload: ExecutionPayload):
   true
 
 # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#process_execution_payload
-func process_execution_payload(
+#func process_execution_payload(
+proc process_execution_payload(
     state: var BeaconState, body: SomeBeaconBlockBody) =
   # Note: This function is designed to be able to be run in parallel with the
   # other `process_block` sub-functions
@@ -374,6 +376,11 @@ func process_execution_payload(
 
     doAssert execution_payload.timestamp == compute_time_at_slot(state, state.slot)
     doAssert verify_execution_state_transition(execution_payload)
+
+  info "FOO5, in process_execution_payload",
+    execution_payload_parent_hash = execution_payload.parent_hash,
+    execution_payload_block_hash = execution_payload.block_hash,
+    state_latest_execution_payload_header_block_hash = state.latest_execution_payload_header.block_hash
 
   state.latest_execution_payload_header = ExecutionPayloadHeader(
     block_hash: execution_payload.block_hash,
