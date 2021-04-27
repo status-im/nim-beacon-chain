@@ -335,11 +335,6 @@ proc process_operations(preset: RuntimePreset,
 
   ok()
 
-# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#is_transition_completed
-func is_transition_completed(state: BeaconState): bool =
-  # Rayonism starts post-merge
-  true
-
 # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#compute_time_at_slot
 func compute_time_at_slot*(state: BeaconState, slot: Slot): uint64 =
   # Note: This function is unsafe with respect to overflows and underflows.

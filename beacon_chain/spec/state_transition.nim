@@ -291,12 +291,7 @@ proc makeBeaconBlock*(
       deposits: List[Deposit, Limit MAX_DEPOSITS](deposits),
       voluntary_exits:
         List[SignedVoluntaryExit, Limit MAX_VOLUNTARY_EXITS](voluntaryExits),
-      # TODO fill in rest of ExecutionPayload fields
-      # ... with assembleBlock.
-      execution_payload: ExecutionPayload(
-        #parent_hash: stateblock_hash,
-        number: state.data.latest_execution_payload_header.number + 1,
-        timestamp: compute_time_at_slot(state.data, state.data.slot))))
+      execution_payload: executionPayload))
 
   let res = process_block(preset, state.data, blck, {skipBlsValidation}, cache)
 

@@ -16,8 +16,6 @@ import
   ../ssz/sszdump,
   ../eth1/eth1_monitor
 
-from times import getTime, toUnix
-
 # Gossip Queue Manager
 # ------------------------------------------------------------------------------
 # The queue manager moves blocks from "Gossip validated" to "Consensus verified"
