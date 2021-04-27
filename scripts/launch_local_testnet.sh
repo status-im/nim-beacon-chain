@@ -207,7 +207,11 @@ NETWORK_NIM_FLAGS=$(scripts/load-testnet-nim-flags.sh "${NETWORK}")
 $MAKE -j ${NPROC} V=1 LOG_LEVEL="${LOG_LEVEL}" NIMFLAGS="${NIMFLAGS} -d:testnet_servers_image -d:local_testnet --listCmd ${NETWORK_NIM_FLAGS}" ${BINARIES}
 
 PIDS=""
-WEB3_ARG="--web3-url=http://localhost:8545"
+
+# For the socat proxy
+#WEB3_ARG="--web3-url=http://localhost:9545"
+WEB3_ARG="--web3-url=http://localhost:9545"
+
 STATE_SNAPSHOT_ARG=""
 BOOTSTRAP_TIMEOUT=30 # in seconds
 DEPOSIT_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000000"

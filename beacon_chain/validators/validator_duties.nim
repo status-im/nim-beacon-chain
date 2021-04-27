@@ -36,6 +36,8 @@ import
   ./validator_pool, ./keystore_management,
   ../gossip_processing/consensus_manager
 
+import strutils
+
 # Metrics for tracking attestation and beacon block loss
 const delayBuckets = [-Inf, -4.0, -2.0, -1.0, -0.5, -0.1, -0.05,
                       0.05, 0.1, 0.5, 1.0, 2.0, 4.0, 8.0, Inf]
@@ -292,16 +294,44 @@ proc getExecutionPayload(node: BeaconNode, state: BeaconState):
     Future[ExecutionPayload] {.async.} =
   doAssert is_transition_completed(state)  # Rayonism
 
+  template phi(x: untyped): uint64 =
+    # obviously incorrect
+    parseHexInt(x).uint64
+
   # Post-merge, normal payload
   let
     execution_parent_hash = state.latest_execution_payload_header.block_hash
     timestamp = compute_time_at_slot(state, state.slot)
 
-  info "FOO4: calling web3Provider.assembleBlock from runQueueProcessingLoop",
+  info "FOO6a: got executionPayloadRPC",
     execution_parent_hash,
     timestamp
-  return await node.web3Provider.assembleBlock(
-    execution_parent_hash, timestamp)
+  let
+    executionPayloadRPC = await node.web3Provider.assembleBlock(
+      execution_parent_hash, timestamp)
+    # TODO a bunch of this depends on Keccak len being same as Eth2Digest
+  info "FOO6b: got executionPayloadRPC",
+    execution_parent_hash,
+    timestamp,
+    executionPayloadRPC
+  let
+    # this doesn't work if there's an error returned
+    executionPayload = ExecutionPayload(
+      block_hash: Eth2Digest.fromHex(executionPayloadRPC.blockHash),
+      parent_hash: Eth2Digest.fromHex(executionPayloadRPC.parentHash),
+      coinbase: EthAddress.fromHex(executionPayloadRPC.miner), # this at least roundtrips things
+      state_root: Eth2Digest.fromHex(executionPayloadRPC.stateRoot),
+      number: phi(executionPayloadRPC.number),
+      gas_limit: phi(executionPayloadRPC.gasLimit),
+      gas_used: phi(executionPayloadRPC.gasUsed),
+      timestamp: phi(executionPayloadRPC.timestamp),
+      receipt_root: Eth2Digest.fromHex(executionPayloadRPC.receiptsRoot))
+  info "FOO6c: got executionPayloadRPC",
+    execution_parent_hash,
+    timestamp,
+    executionPayloadRPC,
+    executionPayload
+  return executionPayload
 
 proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
                                     randao_reveal: ValidatorSig,
@@ -430,17 +460,6 @@ proc proposeBlock(node: BeaconNode,
 
   newBlock.signature = await validator.signBlockProposal(
     fork, genesis_validators_root, slot, newBlock.root)
-
-  # TODO this shouldn't be necessary -- check if the same node calls the same
-  # hash from both here and gossip_to_consensus. It's also actually incorrect
-  # since the network send could fail, in which case it is not really part of
-  # the chain.
-  info "FOO3: calling RPC newBlock from proposeBlock",
-    parent_hash = newBlock.message.body.execution_payload.parent_hash,
-    block_hash = newBlock.message.body.execution_payload.block_hash
-
-  discard await node.web3Provider.newBlock(
-    newBlock.message.body.execution_payload)
 
   return node.proposeSignedBlock(head, validator, newBlock)
 
@@ -738,7 +757,7 @@ proc handleValidatorDuties*(node: BeaconNode, lastSlot, slot: Slot) {.async.} =
     if oldHead != head:
       info "calling RPC node.eth1Monitor.setHead",
         head = head.root
-      doAssert await node.web3Provider.setHead(head.root)
+      discard await node.web3Provider.setHead(head.root)
 
   handleAttestations(node, head, slot)
 
