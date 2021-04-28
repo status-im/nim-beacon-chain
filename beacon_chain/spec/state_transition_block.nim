@@ -372,11 +372,6 @@ proc process_execution_payload(
     doAssert execution_payload.timestamp == compute_time_at_slot(state, state.slot)
     doAssert verify_execution_state_transition(execution_payload)
 
-  info "FOO5, in process_execution_payload",
-    execution_payload_parent_hash = execution_payload.parent_hash,
-    execution_payload_block_hash = execution_payload.block_hash,
-    state_latest_execution_payload_header_block_hash = state.latest_execution_payload_header.block_hash
-
   state.latest_execution_payload_header = ExecutionPayloadHeader(
     block_hash: execution_payload.block_hash,
     parent_hash: execution_payload.parent_hash,

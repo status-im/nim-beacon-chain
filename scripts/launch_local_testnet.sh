@@ -210,7 +210,7 @@ PIDS=""
 
 # For the socat proxy
 #WEB3_ARG="--web3-url=http://localhost:9545"
-WEB3_ARG="--web3-url=http://localhost:9545"
+WEB3_ARG="--web3-url=http://localhost:8545"
 
 STATE_SNAPSHOT_ARG=""
 BOOTSTRAP_TIMEOUT=30 # in seconds
