@@ -319,6 +319,7 @@ proc getExecutionPayload(node: BeaconNode, state: BeaconState):
       gas_used: phi(executionPayloadRPC.gasUsed),
       timestamp: phi(executionPayloadRPC.timestamp),
       receipt_root: Eth2Digest.fromHex(executionPayloadRPC.receiptsRoot),
+      logs_bloom: BloomLogs.fromHex(executionPayloadRPC.logsBloom),
       transactions: List[OpaqueTransaction, MAX_EXECUTION_TRANSACTIONS].init(
         mapIt(executionPayloadRPC.transactions, it.getOpaqueTransaction)))
   return executionPayload
