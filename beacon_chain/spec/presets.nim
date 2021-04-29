@@ -27,6 +27,9 @@ type
     MIN_GENESIS_ACTIVE_VALIDATOR_COUNT*: uint64
     MIN_GENESIS_TIME*: uint64
     ETH1_FOLLOW_DISTANCE*: uint64
+    DEPOSIT_CHAIN_ID*: uint64
+    DEPOSIT_NETWORK_ID*: uint64
+    SECONDS_PER_ETH1_BLOCK*: uint64
 
   PresetFile* = object
     values*: Table[PresetValue, TaintedString]
@@ -38,12 +41,15 @@ const
   const_preset* {.strdefine.} = "mainnet"
 
   runtimeValues* = {
+    ALTAIR_FORK_VERSION,
+    DEPOSIT_CHAIN_ID,
+    DEPOSIT_NETWORK_ID,
+    ETH1_FOLLOW_DISTANCE,
+    GENESIS_DELAY,
+    GENESIS_FORK_VERSION,
     MIN_GENESIS_ACTIVE_VALIDATOR_COUNT,
     MIN_GENESIS_TIME,
-    GENESIS_FORK_VERSION,
-    ALTAIR_FORK_VERSION,
-    GENESIS_DELAY,
-    ETH1_FOLLOW_DISTANCE,
+    SECONDS_PER_ETH1_BLOCK
   }
 
   # These constants cannot really be overriden in a preset.
@@ -65,7 +71,16 @@ const
     DOMAIN_SYNC_COMMITTEE,
     DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF,
     DOMAIN_CONTRIBUTION_AND_PROOF,
-    CONFIG_NAME
+    CONFIG_NAME,
+
+    # TODO:
+    # The following constants are ignored because they are already
+    # present in the testnet config presets, but our code is still
+    # not using them in any way. Once the respective functionality
+    # is implemented, they should be removed from the ignored set.
+    MERGE_FORK_VERSION,
+    MERGE_FORK_SLOT,
+    TRANSITION_TOTAL_DIFFICULTY
   }
 
   presetValueTypes* = {
@@ -141,7 +156,10 @@ const mainnetRuntimePreset* = RuntimePreset(
   GENESIS_FORK_VERSION: Version [byte 0, 0, 0, 0],
   ALTAIR_FORK_VERSION: Version [byte 1, 0, 0, 0],
   GENESIS_DELAY: 604800,
-  ETH1_FOLLOW_DISTANCE: 2048)
+  ETH1_FOLLOW_DISTANCE: 2048,
+  DEPOSIT_CHAIN_ID: 1,
+  DEPOSIT_NETWORK_ID: 1,
+  SECONDS_PER_ETH1_BLOCK: 14)
 
 const
   minimalRuntimePreset* = RuntimePreset(
@@ -150,7 +168,10 @@ const
     GENESIS_FORK_VERSION: Version [byte 0, 0, 0, 1],
     ALTAIR_FORK_VERSION: Version [byte 1, 0, 0, 0],
     GENESIS_DELAY: 300,
-    ETH1_FOLLOW_DISTANCE: 16)
+    ETH1_FOLLOW_DISTANCE: 16,
+    DEPOSIT_CHAIN_ID: 5,
+    DEPOSIT_NETWORK_ID: 5,
+    SECONDS_PER_ETH1_BLOCK: 14)
 
 when const_preset == "mainnet":
   template defaultRuntimePreset*: auto = mainnetRuntimePreset
@@ -207,5 +228,8 @@ else:
     MIN_GENESIS_TIME: MIN_GENESIS_TIME,
     GENESIS_FORK_VERSION: GENESIS_FORK_VERSION,
     GENESIS_DELAY: GENESIS_DELAY,
-    ETH1_FOLLOW_DISTANCE: ETH1_FOLLOW_DISTANCE)
+    ETH1_FOLLOW_DISTANCE: ETH1_FOLLOW_DISTANCE,
+    DEPOSIT_CHAIN_ID: DEPOSIT_CHAIN_ID,
+    DEPOSIT_NETWORK_ID: DEPOSIT_NETWORK_ID,
+    SECONDS_PER_ETH1_BLOCK: SECONDS_PER_ETH1_BLOCK)
 

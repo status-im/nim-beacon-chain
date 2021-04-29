@@ -304,6 +304,10 @@ proc init*(T: type BeaconNode,
   else:
     nil
 
+  if config.web3Urls.len == 0:
+    fatal "Please specify the address of your execution engine through the --web3-url parameter"
+    quit 1
+
   let
     netKeys = getPersistentNetKeys(rng[], config)
     nickname = if config.nodeName == "auto": shortForm(netKeys)

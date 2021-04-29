@@ -106,10 +106,6 @@ const IgnoreKeys = [
   "GENESIS_FORK_VERSION",
   "GENESIS_DELAY",
   "ETH1_FOLLOW_DISTANCE",
-
-  # TODO remove when possible
-  "DEPOSIT_CHAIN_ID",
-  "DEPOSIT_NETWORK_ID"
 ]
 
 func parseU32LEHex(hexValue: string): uint32 =

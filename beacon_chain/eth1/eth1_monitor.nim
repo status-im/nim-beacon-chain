@@ -300,8 +300,8 @@ func voting_period_start_time*(state: BeaconState): uint64 =
 func is_candidate_block(preset: RuntimePreset,
                         blk: Eth1Block,
                         period_start: uint64): bool =
-  (blk.timestamp + SECONDS_PER_ETH1_BLOCK * preset.ETH1_FOLLOW_DISTANCE <= period_start) and
-  (blk.timestamp + SECONDS_PER_ETH1_BLOCK * preset.ETH1_FOLLOW_DISTANCE * 2 >= period_start)
+  (blk.timestamp + preset.SECONDS_PER_ETH1_BLOCK * preset.ETH1_FOLLOW_DISTANCE <= period_start) and
+  (blk.timestamp + preset.SECONDS_PER_ETH1_BLOCK * preset.ETH1_FOLLOW_DISTANCE * 2 >= period_start)
 
 func asEth2Digest*(x: BlockHash): Eth2Digest =
   Eth2Digest(data: array[32, byte](x))
