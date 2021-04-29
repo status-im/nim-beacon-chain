@@ -307,10 +307,6 @@ proc getExecutionPayload(node: BeaconNode, state: BeaconState):
     executionPayloadRPC = await node.web3Provider.assembleBlock(
       execution_parent_hash, timestamp)
     # TODO a bunch of this depends on Keccak len being same as Eth2Digest
-  info "FOO6b: got executionPayloadRPC",
-    execution_parent_hash,
-    timestamp,
-    executionPayloadRPC
   let
     # this doesn't work if there's an error returned
     executionPayload = ExecutionPayload(
@@ -325,11 +321,6 @@ proc getExecutionPayload(node: BeaconNode, state: BeaconState):
       receipt_root: Eth2Digest.fromHex(executionPayloadRPC.receiptsRoot),
       transactions: List[OpaqueTransaction, MAX_EXECUTION_TRANSACTIONS].init(
         mapIt(executionPayloadRPC.transactions, it.getOpaqueTransaction)))
-  info "FOO6c: got executionPayloadRPC",
-    execution_parent_hash,
-    timestamp,
-    executionPayloadRPC,
-    executionPayload
   return executionPayload
 
 proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
@@ -756,7 +747,7 @@ proc handleValidatorDuties*(node: BeaconNode, lastSlot, slot: Slot) {.async.} =
     if oldHead != head:
       info "calling RPC node.eth1Monitor.setHead",
         head = head.root
-      discard await node.web3Provider.setHead(head.root)
+      doAssert (await node.web3Provider.setHead(head.root)).success
 
   handleAttestations(node, head, slot)
 
