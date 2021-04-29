@@ -332,7 +332,7 @@ proc initialize_beacon_state_from_eth1*(
   # doAssert-check for when it's not true (e.g., the Catalyst's
   # genesis configuration's changed, or it's a testnet)
   state.latest_execution_payload_header.block_hash =
-    Eth2Digest.fromHex("0x3a3fdfc9ab6e17ff530b57bc21494da3848ebbeaf9343545fded7a18d221ffec")
+    Eth2Digest.fromHex("0x3e4dbaad066f0a938ffcb238e018f989b536f1a7b3ea1ba4fb381006a8973449")
 
   state
 

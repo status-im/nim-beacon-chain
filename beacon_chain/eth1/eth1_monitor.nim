@@ -423,6 +423,12 @@ func encodeOpaqueTransaction(ot: OpaqueTransaction): string =
     res &= b.toHex
   res
 
+func encodeOpaqueTransaction(ot: OpaqueTransaction): string =
+  var res = "0x"
+  for b in ot.data:
+    res &= b.toHex
+  res
+
 proc newBlock*(p: Web3DataProviderRef,
                executableData: ExecutionPayload): Future[BoolReturnValidRPC] =
   p.web3.provider.consensus_newBlock(ExecutionPayloadRPC(
