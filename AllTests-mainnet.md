@@ -6,9 +6,9 @@ AllTests-mainnet
 + BLS_WITHDRAWAL_PREFIX                             "0x00"               [Preset: mainnet]   OK
 + CHURN_LIMIT_QUOTIENT                              65536                [Preset: mainnet]   OK
   CONFIG_NAME                                       "mainnet"            [Preset: mainnet]   Skip
-  DEPOSIT_CHAIN_ID                                  1                    [Preset: mainnet]   Skip
++ DEPOSIT_CHAIN_ID                                  1                    [Preset: mainnet]   OK
   DEPOSIT_CONTRACT_ADDRESS                          "0x00000000219ab540356cBB839Cbe05303d770 Skip
-  DEPOSIT_NETWORK_ID                                1                    [Preset: mainnet]   Skip
++ DEPOSIT_NETWORK_ID                                1                    [Preset: mainnet]   OK
 + DOMAIN_AGGREGATE_AND_PROOF                        "0x06000000"         [Preset: mainnet]   OK
 + DOMAIN_BEACON_ATTESTER                            "0x01000000"         [Preset: mainnet]   OK
 + DOMAIN_BEACON_PROPOSER                            "0x00000000"         [Preset: mainnet]   OK
@@ -63,7 +63,7 @@ AllTests-mainnet
 + VALIDATOR_REGISTRY_LIMIT                          1099511627776        [Preset: mainnet]   OK
 + WHISTLEBLOWER_REWARD_QUOTIENT                     512                  [Preset: mainnet]   OK
 ```
-OK: 51/60 Fail: 0/60 Skip: 9/60
+OK: 53/60 Fail: 0/60 Skip: 7/60
 ## Attestation pool processing [Preset: mainnet]
 ```diff
 + Attestations may arrive in any order [Preset: mainnet]                                     OK
@@ -180,7 +180,7 @@ OK: 3/3 Fail: 0/3 Skip: 0/3
 + Interop signatures                                                                         OK
 + Mocked start private key                                                                   OK
 ```
-OK: 3/3 Fail: 0/3 Skip: 0/3
+OK: 2/2 Fail: 0/2 Skip: 0/2
 ## PeerPool testing suite
 ```diff
 + Access peers by key test                                                                   OK

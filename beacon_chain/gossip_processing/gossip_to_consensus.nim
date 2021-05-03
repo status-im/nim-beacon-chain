@@ -184,7 +184,7 @@ proc storeBlock(
 # Event Loop
 # ------------------------------------------------------------------------------
 
-proc processBlock(self: var VerifQueueManager, entry: BlockEntry) =
+proc processBlock(self: var VerifQueueManager, entry: BlockEntry): bool =
   logScope:
     blockRoot = shortLog(entry.v.blk.root)
 
@@ -255,19 +255,7 @@ proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
 
     discard await idleAsync().withTimeout(idleTimeout)
 
-    self[].processBlock(await self[].blocksQueue.popFirst())
-    when false: #if pB:
-        # https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec states that
-        # this timestamp is the unix timestamp of a new block. getTime's int64,
-        # but not negative, so this type conversion is safe.
-        # TODO make sure this doesn't increase latency unduly. it's not as bad,
-        # since blocks are the most important thing already, and the awaits are
-        # ordered, but worth checking.
-        # TODO getTime() isn't correct; it's slot time
-        let curTime = toUnix(getTime())
-        info "FOO4: calling web3Provider.assembleBlock from runQueueProcessingLoop",
-          parent_root = blck.v.blk.message.parent_root,
-          curTime
-        let executableBlock = await web3Provider.assembleBlock(
-          blck.v.blk.message.parent_root, curTime.uint64)
-        discard await web3Provider.newBlock(executableBlock)
+    let blck = await self[].blocksQueue.popFirst()
+    if self[].processBlock(blck):
+      doAssert (await self.consensusManager.web3Provider.newBlock(
+        blck.v.blk.message.body.execution_payload)).valid

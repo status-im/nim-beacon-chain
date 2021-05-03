@@ -274,7 +274,6 @@ test: | $(XML_TEST_BINARIES) $(TEST_BINARIES)
 ifeq ($(DISABLE_TEST_FIXTURES_SCRIPT), 0)
 	V=$(V) scripts/setup_official_tests.sh
 endif
-	tests/simulation/restapi.sh
 	for TEST_BINARY in $(XML_TEST_BINARIES); do \
 		PARAMS="--xml:build/$${TEST_BINARY}.xml --console"; \
 		echo -e "\nRunning $${TEST_BINARY} $${PARAMS}\n"; \
