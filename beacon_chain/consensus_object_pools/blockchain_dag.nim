@@ -714,6 +714,7 @@ proc applyBlock(
 
   loadStateCache(dag, cache, blck.refs, blck.data.message.slot.epoch)
 
+  # FOO: state_transition call
   let ok = state_transition(
     dag.runtimePreset, state.data, blck.data,
     cache, rewards, flags + dag.updateFlags + {slotProcessed}, restore)
@@ -724,7 +725,7 @@ proc applyBlock(
 
 proc updateStateData*(
     dag: ChainDAGRef, state: var StateData, bs: BlockSlot, save: bool,
-    cache: var StateCache) =
+    cache: var StateCache) {.deprecated.} =
   ## Rewind or advance state such that it matches the given block and slot -
   ## this may include replaying from an earlier snapshot if blck is on a
   ## different branch or has advanced to a higher slot number than slot
