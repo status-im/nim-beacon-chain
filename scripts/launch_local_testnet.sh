@@ -208,8 +208,6 @@ $MAKE -j ${NPROC} V=1 LOG_LEVEL="${LOG_LEVEL}" NIMFLAGS="${NIMFLAGS} -d:testnet_
 
 PIDS=""
 
-# For the socat proxy
-#WEB3_ARG="--web3-url=http://localhost:9545"
 WEB3_ARG="--web3-url=http://127.0.0.1:8545"
 
 STATE_SNAPSHOT_ARG=""

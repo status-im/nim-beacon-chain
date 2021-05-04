@@ -22,7 +22,7 @@ import
   ".."/[beacon_chain_db, beacon_node_status],
   ./merkle_minimal
 
-import ../eth2_merge_web3.nim
+import ../rpc/eth_merge_web3
 import web3/ethhexstrings
 import stew/byteutils
 

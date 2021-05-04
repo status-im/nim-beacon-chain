@@ -351,8 +351,7 @@ func verify_execution_state_transition(execution_payload: ExecutionPayload):
   true
 
 # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#process_execution_payload
-#func process_execution_payload(
-proc process_execution_payload(
+func process_execution_payload(
     state: var BeaconState, body: SomeBeaconBlockBody) =
   # Note: This function is designed to be able to be run in parallel with the
   # other `process_block` sub-functions
