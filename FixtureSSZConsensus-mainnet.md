@@ -16,11 +16,14 @@ FixtureSSZConsensus-mainnet
 +   Testing    DepositMessage                                                                OK
 +   Testing    Eth1Block                                                                     OK
 +   Testing    Eth1Data                                                                      OK
++   Testing    ExecutionPayload                                                              OK
++   Testing    ExecutionPayloadHeader                                                        OK
 +   Testing    Fork                                                                          OK
 +   Testing    ForkData                                                                      OK
 +   Testing    HistoricalBatch                                                               OK
 +   Testing    IndexedAttestation                                                            OK
 +   Testing    PendingAttestation                                                            OK
++   Testing    PowBlock                                                                      OK
 +   Testing    ProposerSlashing                                                              OK
 +   Testing    SignedAggregateAndProof                                                       OK
 +   Testing    SignedBeaconBlock                                                             OK
@@ -30,7 +33,7 @@ FixtureSSZConsensus-mainnet
 +   Testing    Validator                                                                     OK
 +   Testing    VoluntaryExit                                                                 OK
 ```
-OK: 27/27 Fail: 0/27 Skip: 0/27
+OK: 30/30 Fail: 0/30 Skip: 0/30
 
 ---TOTAL---
-OK: 27/27 Fail: 0/27 Skip: 0/27
+OK: 30/30 Fail: 0/30 Skip: 0/30
