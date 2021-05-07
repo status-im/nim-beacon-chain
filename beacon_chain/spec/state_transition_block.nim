@@ -363,7 +363,7 @@ func process_execution_payload(
 
   # test suite trips over these due to is_transition_completed being pinned on
   # for Rayonism, but they're useful to enable otherwise
-  when false:
+  when true:
     if is_transition_completed(state):
       doAssert execution_payload.parent_hash == state.latest_execution_payload_header.block_hash
       doAssert execution_payload.number == state.latest_execution_payload_header.number + 1

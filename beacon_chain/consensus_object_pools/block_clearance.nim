@@ -294,7 +294,7 @@ proc addRawBlock*(
        dag: var ChainDAGRef, quarantine: var QuarantineRef,
        signedBlock: SignedBeaconBlock,
        onBlockAdded: OnBlockAdded
-     ): Result[BlockRef, (ValidationResult, BlockError)] {.deprecated.} =
+     ): Result[BlockRef, (ValidationResult, BlockError)] =
   ## Try adding a block to the chain, verifying first that it passes the state
   ## transition function and contains correct cryptographic signature.
   ##

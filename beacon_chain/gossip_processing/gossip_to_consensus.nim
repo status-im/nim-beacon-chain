@@ -124,7 +124,7 @@ proc hasBlocks*(self: VerifQueueManager): bool =
 # Enqueue
 # ------------------------------------------------------------------------------
 
-proc addBlock*(self: var VerifQueueManager, syncBlock: SyncBlock) =
+proc addBlock*(self: var VerifQueueManager, syncBlock: SyncBlock) {.deprecated.} =
   ## Enqueue a Gossip-validated block for consensus verification
   # Backpressure:
   #   There is no backpressure here - producers must wait for the future in the
