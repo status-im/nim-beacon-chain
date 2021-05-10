@@ -18,8 +18,8 @@ import
   ./fixtures_utils
 
 const
-  FinalityDir = SszTestsDir/const_preset/"phase0"/"finality"/"finality"/"pyspec_tests"
-  SanityBlocksDir = SszTestsDir/const_preset/"phase0"/"sanity"/"blocks"/"pyspec_tests"
+  FinalityDir = SszTestsDir/const_preset/"merge"/"finality"/"finality"/"pyspec_tests"
+  SanityBlocksDir = SszTestsDir/const_preset/"merge"/"sanity"/"blocks"/"pyspec_tests"
 
 proc runTest(testName, testDir, unitTestName: string) =
   # We wrap the tests in a proc to avoid running out of globals
@@ -31,7 +31,7 @@ proc runTest(testName, testDir, unitTestName: string) =
 
   proc `testImpl _ blck _ testName`() =
     let
-      hasPostState = existsFile(testPath/"post.ssz")
+      hasPostState = existsFile(testPath/"post.ssz_snappy")
       prefix = if hasPostState: "[Valid]   " else: "[Invalid] "
 
     test prefix & testName & " - " & unitTestName & preset():
@@ -44,7 +44,7 @@ proc runTest(testName, testDir, unitTestName: string) =
 
       # In test cases with more than 10 blocks the first 10 aren't 0-prefixed,
       # so purely lexicographic sorting wouldn't sort properly.
-      let numBlocks = toSeq(walkPattern(testPath/"blocks_*.ssz")).len
+      let numBlocks = toSeq(walkPattern(testPath/"blocks_*.ssz_snappy")).len
       for i in 0 ..< numBlocks:
         let blck = parseTest(testPath/"blocks_" & $i & ".ssz", SSZ, SignedBeaconBlock)
 

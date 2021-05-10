@@ -17,7 +17,7 @@ import
   ./fixtures_utils,
   ../helpers/debug_state
 
-const SanitySlotsDir = SszTestsDir/const_preset/"phase0"/"sanity"/"slots"/"pyspec_tests"
+const SanitySlotsDir = SszTestsDir/const_preset/"merge"/"sanity"/"slots"/"pyspec_tests"
 
 proc runTest(identifier: string) =
   let

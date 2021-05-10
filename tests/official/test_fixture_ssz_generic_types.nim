@@ -1,5 +1,5 @@
 # beacon_chain
-# Copyright (c) 2018-2020 Status Research & Development GmbH
+# Copyright (c) 2018-2021 Status Research & Development GmbH
 # Licensed and distributed under either of
 #   * MIT license (license terms in the root directory or at https://opensource.org/licenses/MIT).
 #   * Apache v2 license (license terms in the root directory or at https://www.apache.org/licenses/LICENSE-2.0).
@@ -17,7 +17,8 @@ import
   ../../beacon_chain/spec/[datatypes, digest],
   ../../beacon_chain/ssz,
   # Test utilities
-  ./fixtures_utils
+  ./fixtures_utils,
+  snappy
 
 # Parsing definitions
 # ------------------------------------------------------------------------
@@ -82,7 +83,7 @@ type
 proc checkBasic(T: typedesc,
                 dir: string,
                 expectedHash: SSZHashTreeRoot) =
-  var fileContents = readFileBytes(dir/"serialized.ssz")
+  var fileContents = snappy.decode(readFileBytes(dir/"serialized.ssz_snappy"), 10_000_000)
   var deserialized = newClone(sszDecodeEntireInput(fileContents, T))
 
   let expectedHash = expectedHash.root

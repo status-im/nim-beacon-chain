@@ -3,27 +3,16 @@ FixtureAll-mainnet
 ## 
 ```diff
 + Rewards - all_balances_too_low_for_reward [Preset: mainnet]                                OK
-+ Rewards - duplicate_attestations_at_later_slots [Preset: mainnet]                          OK
 + Rewards - empty [Preset: mainnet]                                                          OK
 + Rewards - empty_leak [Preset: mainnet]                                                     OK
 + Rewards - full_all_correct [Preset: mainnet]                                               OK
 + Rewards - full_but_partial_participation [Preset: mainnet]                                 OK
 + Rewards - full_but_partial_participation_leak [Preset: mainnet]                            OK
-+ Rewards - full_correct_target_incorrect_head [Preset: mainnet]                             OK
-+ Rewards - full_correct_target_incorrect_head_leak [Preset: mainnet]                        OK
-+ Rewards - full_delay_max_slots [Preset: mainnet]                                           OK
-+ Rewards - full_delay_one_slot [Preset: mainnet]                                            OK
-+ Rewards - full_half_correct_target_incorrect_head [Preset: mainnet]                        OK
-+ Rewards - full_half_correct_target_incorrect_head_leak [Preset: mainnet]                   OK
-+ Rewards - full_half_incorrect_target_correct_head [Preset: mainnet]                        OK
-+ Rewards - full_half_incorrect_target_correct_head_leak [Preset: mainnet]                   OK
-+ Rewards - full_half_incorrect_target_incorrect_head [Preset: mainnet]                      OK
-+ Rewards - full_half_incorrect_target_incorrect_head_leak [Preset: mainnet]                 OK
 + Rewards - full_leak [Preset: mainnet]                                                      OK
-+ Rewards - full_mixed_delay [Preset: mainnet]                                               OK
 + Rewards - full_random_0 [Preset: mainnet]                                                  OK
 + Rewards - full_random_1 [Preset: mainnet]                                                  OK
 + Rewards - full_random_2 [Preset: mainnet]                                                  OK
++ Rewards - full_random_3 [Preset: mainnet]                                                  OK
 + Rewards - full_random_five_epoch_leak [Preset: mainnet]                                    OK
 + Rewards - full_random_leak [Preset: mainnet]                                               OK
 + Rewards - full_random_low_balances [Preset: mainnet]                                       OK
@@ -31,9 +20,6 @@ FixtureAll-mainnet
 + Rewards - full_random_ten_epoch_leak [Preset: mainnet]                                     OK
 + Rewards - half_full [Preset: mainnet]                                                      OK
 + Rewards - half_full_leak [Preset: mainnet]                                                 OK
-+ Rewards - one_attestation_one_correct [Preset: mainnet]                                    OK
-+ Rewards - one_attestation_one_correct_leak [Preset: mainnet]                               OK
-+ Rewards - proposer_not_in_attestations [Preset: mainnet]                                   OK
 + Rewards - quarter_full [Preset: mainnet]                                                   OK
 + Rewards - quarter_full_leak [Preset: mainnet]                                              OK
 + Rewards - some_very_low_effective_balances_that_attested [Preset: mainnet]                 OK
@@ -64,7 +50,6 @@ FixtureAll-mainnet
 + [Invalid] Official - Sanity - Blocks - invalid_state_root [Preset: mainnet]                OK
 + [Invalid] Official - Sanity - Blocks - parent_from_same_slot [Preset: mainnet]             OK
 + [Invalid] Official - Sanity - Blocks - prev_slot_block_transition [Preset: mainnet]        OK
-+ [Invalid] Official - Sanity - Blocks - proposal_for_genesis_slot [Preset: mainnet]         OK
 + [Invalid] Official - Sanity - Blocks - same_slot_block_transition [Preset: mainnet]        OK
 + [Invalid] Official - Sanity - Blocks - slash_and_exit_same_index [Preset: mainnet]         OK
 + [Invalid] Official - Sanity - Blocks - zero_block_sig [Preset: mainnet]                    OK
@@ -84,12 +69,16 @@ FixtureAll-mainnet
 + [Invalid] att2_high_index                                                                  OK
 + [Invalid] bad_source_root                                                                  OK
 + [Invalid] before_inclusion_delay                                                           OK
++ [Invalid] correct_after_epoch_delay                                                        OK
 + [Invalid] empty_participants_seemingly_valid_sig                                           OK
 + [Invalid] empty_participants_zeroes_sig                                                    OK
 + [Invalid] epochs_are_different                                                             OK
 + [Invalid] future_target_epoch                                                              OK
 + [Invalid] headers_are_same_sigs_are_different                                              OK
 + [Invalid] headers_are_same_sigs_are_same                                                   OK
++ [Invalid] incorrect_head_after_epoch_delay                                                 OK
++ [Invalid] incorrect_head_and_target_after_epoch_delay                                      OK
++ [Invalid] incorrect_target_after_epoch_delay                                               OK
 + [Invalid] invalid_attestation_signature                                                    OK
 + [Invalid] invalid_current_source_root                                                      OK
 + [Invalid] invalid_different_proposer_indices                                               OK
@@ -138,11 +127,6 @@ FixtureAll-mainnet
 + [Valid]    new_deposit_under_max                                                           OK
 + [Valid]    success_top_up                                                                  OK
 + [Valid]    valid_sig_but_forked_state                                                      OK
-+ [Valid]   Official - Finality - finality_no_updates_at_genesis [Preset: mainnet]           OK
-+ [Valid]   Official - Finality - finality_rule_1 [Preset: mainnet]                          OK
-+ [Valid]   Official - Finality - finality_rule_2 [Preset: mainnet]                          OK
-+ [Valid]   Official - Finality - finality_rule_3 [Preset: mainnet]                          OK
-+ [Valid]   Official - Finality - finality_rule_4 [Preset: mainnet]                          OK
 + [Valid]   Official - Sanity - Blocks - attestation [Preset: mainnet]                       OK
 + [Valid]   Official - Sanity - Blocks - attester_slashing [Preset: mainnet]                 OK
 + [Valid]   Official - Sanity - Blocks - balance_driven_status_transitions [Preset: mainnet] OK
@@ -150,10 +134,6 @@ FixtureAll-mainnet
 + [Valid]   Official - Sanity - Blocks - deposit_top_up [Preset: mainnet]                    OK
 + [Valid]   Official - Sanity - Blocks - empty_block_transition [Preset: mainnet]            OK
 + [Valid]   Official - Sanity - Blocks - empty_epoch_transition [Preset: mainnet]            OK
-+ [Valid]   Official - Sanity - Blocks - full_random_operations_0 [Preset: mainnet]          OK
-+ [Valid]   Official - Sanity - Blocks - full_random_operations_1 [Preset: mainnet]          OK
-+ [Valid]   Official - Sanity - Blocks - full_random_operations_2 [Preset: mainnet]          OK
-+ [Valid]   Official - Sanity - Blocks - full_random_operations_3 [Preset: mainnet]          OK
 + [Valid]   Official - Sanity - Blocks - high_proposer_index [Preset: mainnet]               OK
 + [Valid]   Official - Sanity - Blocks - historical_batch [Preset: mainnet]                  OK
 + [Valid]   Official - Sanity - Blocks - multiple_attester_slashings_no_overlap [Preset: mai OK
@@ -166,27 +146,50 @@ FixtureAll-mainnet
 + [Valid]   Official - Sanity - Blocks - skipped_slots [Preset: mainnet]                     OK
 + [Valid]   Official - Sanity - Blocks - slash_and_exit_diff_index [Preset: mainnet]         OK
 + [Valid]   Official - Sanity - Blocks - voluntary_exit [Preset: mainnet]                    OK
++ [Valid]   correct_epoch_delay                                                              OK
++ [Valid]   correct_min_inclusion_delay                                                      OK
++ [Valid]   correct_sqrt_epoch_delay                                                         OK
 + [Valid]   default_exit_epoch_subsequent_exit                                               OK
++ [Valid]   incorrect_head_and_target_epoch_delay                                            OK
++ [Valid]   incorrect_head_and_target_min_inclusion_delay                                    OK
++ [Valid]   incorrect_head_and_target_sqrt_epoch_delay                                       OK
++ [Valid]   incorrect_head_epoch_delay                                                       OK
++ [Valid]   incorrect_head_min_inclusion_delay                                               OK
++ [Valid]   incorrect_head_sqrt_epoch_delay                                                  OK
++ [Valid]   incorrect_target_epoch_delay                                                     OK
++ [Valid]   incorrect_target_min_inclusion_delay                                             OK
++ [Valid]   incorrect_target_sqrt_epoch_delay                                                OK
 + [Valid]   success                                                                          OK
 + [Valid]   success_already_exited_long_ago                                                  OK
 + [Valid]   success_already_exited_recent                                                    OK
 + [Valid]   success_block_header                                                             OK
 + [Valid]   success_double                                                                   OK
 + [Valid]   success_exit_queue                                                               OK
++ [Valid]   success_low_balances                                                             OK
++ [Valid]   success_misc_balances                                                            OK
 + [Valid]   success_multi_proposer_index_iterations                                          OK
 + [Valid]   success_previous_epoch                                                           OK
 + [Valid]   success_slashed_and_proposer_index_the_same                                      OK
 + [Valid]   success_surround                                                                 OK
++ [Valid]   success_with_effective_balance_disparity                                         OK
 ```
-OK: 175/175 Fail: 0/175 Skip: 0/175
-## Official - Epoch Processing - Final updates [Preset: mainnet]
+OK: 170/170 Fail: 0/170 Skip: 0/170
+## Official - Epoch Processing - Effective balance updates [Preset: mainnet]
 ```diff
-+ Final updates - effective_balance_hysteresis [Preset: mainnet]                             OK
-+ Final updates - eth1_vote_no_reset [Preset: mainnet]                                       OK
-+ Final updates - eth1_vote_reset [Preset: mainnet]                                          OK
-+ Final updates - historical_root_accumulator [Preset: mainnet]                              OK
++ Effective balance updates - effective_balance_hysteresis [Preset: mainnet]                 OK
 ```
-OK: 4/4 Fail: 0/4 Skip: 0/4
+OK: 1/1 Fail: 0/1 Skip: 0/1
+## Official - Epoch Processing - Eth1 data reset [Preset: mainnet]
+```diff
++ Eth1 data reset - eth1_vote_no_reset [Preset: mainnet]                                     OK
++ Eth1 data reset - eth1_vote_reset [Preset: mainnet]                                        OK
+```
+OK: 2/2 Fail: 0/2 Skip: 0/2
+## Official - Epoch Processing - Historical roots update [Preset: mainnet]
+```diff
++ Historical roots update - historical_root_accumulator [Preset: mainnet]                    OK
+```
+OK: 1/1 Fail: 0/1 Skip: 0/1
 ## Official - Epoch Processing - Justification & Finalization [Preset: mainnet]
 ```diff
 + Justification & Finalization - 123_ok_support [Preset: mainnet]                            OK
@@ -200,6 +203,11 @@ OK: 4/4 Fail: 0/4 Skip: 0/4
 + Justification & Finalization - 23_poor_support [Preset: mainnet]                           OK
 ```
 OK: 9/9 Fail: 0/9 Skip: 0/9
+## Official - Epoch Processing - RANDAO mixes reset [Preset: mainnet]
+```diff
++ RANDAO mixes reset - updated_randao_mixes [Preset: mainnet]                                OK
+```
+OK: 1/1 Fail: 0/1 Skip: 0/1
 ## Official - Epoch Processing - Registry updates [Preset: mainnet]
 ```diff
 + Registry updates - activation_queue_activation_and_ejection [Preset: mainnet]              OK
@@ -214,11 +222,17 @@ OK: 9/9 Fail: 0/9 Skip: 0/9
 OK: 8/8 Fail: 0/8 Skip: 0/8
 ## Official - Epoch Processing - Slashings [Preset: mainnet]
 ```diff
++ Slashings - low_penalty [Preset: mainnet]                                                  OK
 + Slashings - max_penalties [Preset: mainnet]                                                OK
++ Slashings - minimal_penalty [Preset: mainnet]                                              OK
 + Slashings - scaled_penalties [Preset: mainnet]                                             OK
-+ Slashings - small_penalty [Preset: mainnet]                                                OK
 ```
-OK: 3/3 Fail: 0/3 Skip: 0/3
+OK: 4/4 Fail: 0/4 Skip: 0/4
+## Official - Epoch Processing - Slashings reset [Preset: mainnet]
+```diff
++ Slashings reset - flush_slashings [Preset: mainnet]                                        OK
+```
+OK: 1/1 Fail: 0/1 Skip: 0/1
 
 ---TOTAL---
-OK: 199/199 Fail: 0/199 Skip: 0/199
+OK: 197/197 Fail: 0/197 Skip: 0/197

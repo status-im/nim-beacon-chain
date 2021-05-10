@@ -15,6 +15,8 @@ import
   stew/byteutils,
   serialization, json_serialization
 
+import snappy
+
 export  # Workaround:
   #   - https://github.com/status-im/nim-serialization/issues/4
   #   - https://github.com/status-im/nim-serialization/issues/5
@@ -42,9 +44,9 @@ type
 const
   FixturesDir* =
     currentSourcePath.rsplit(DirSep, 1)[0] / ".." / ".." / "vendor" / "nim-eth2-scenarios"
-  SszTestsDir* = FixturesDir / "tests-v" & SPEC_VERSION
+  SszTestsDir* = FixturesDir / "tests-v1.1.0-alpha.4-pre2"
 
-proc parseTest*(path: string, Format: typedesc[Json or SSZ], T: typedesc): T =
+proc parseTest*(path: string, Format: typedesc[Json], T: typedesc): T =
   try:
     # debugEcho "          [Debug] Loading file: \"", path, '\"'
     result = Format.loadFile(path, T)
@@ -64,6 +66,19 @@ proc sszDecodeEntireInput*(input: openArray[byte], Decoded: type): Decoded =
 
   if stream.readable:
     raise newException(UnconsumedInput, "Remaining bytes in the input")
+
+proc parseTest*(path: string, Format: typedesc[SSZ], T: typedesc): T =
+  try:
+    # debugEcho "          [Debug] Loading file: \"", path, '\"'
+    # Deserialize into a ref object to not fill Nim stack # TODO...
+    const MAX_OBJECT_SIZE = 100_048_576
+    let encoded = snappy.decode(readFileBytes(path & "_snappy"), MAX_OBJECT_SIZE)
+    result = sszDecodeEntireInput(encoded, T)
+  except SerializationError as err:
+    writeStackTrace()
+    stderr.write $Format & " load issue for file \"", path, "\"\n"
+    stderr.write err.formatMsg(path), "\n"
+    quit 1
 
 proc process_justification_and_finalization*(state: var BeaconState) =
   var cache = StateCache()

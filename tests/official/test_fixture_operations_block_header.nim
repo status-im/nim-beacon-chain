@@ -20,7 +20,7 @@ import
   ./fixtures_utils,
   ../helpers/debug_state
 
-const OpBlockHeaderDir = SszTestsDir/const_preset/"phase0"/"operations"/"block_header"/"pyspec_tests"
+const OpBlockHeaderDir = SszTestsDir/const_preset/"merge"/"operations"/"block_header"/"pyspec_tests"
 
 proc runTest(identifier: string) =
   # We wrap the tests in a proc to avoid running out of globals
@@ -33,7 +33,7 @@ proc runTest(identifier: string) =
   proc `testImpl _ blockheader _ identifier`() =
 
     var prefix: string
-    if existsFile(testDir/"post.ssz"):
+    if existsFile(testDir/"post.ssz_snappy"):
       prefix = "[Valid]   "
     else:
       prefix = "[Invalid] "
@@ -44,7 +44,7 @@ proc runTest(identifier: string) =
       let blck = parseTest(testDir/"block.ssz", SSZ, BeaconBlock)
       var preState = newClone(parseTest(testDir/"pre.ssz", SSZ, BeaconState))
 
-      if existsFile(testDir/"post.ssz"):
+      if existsFile(testDir/"post.ssz_snappy"):
         let postState = newClone(parseTest(testDir/"post.ssz", SSZ, BeaconState))
         let done = process_block_header(preState[], blck, {}, cache).isOk
         doAssert done, "Valid block header not processed"

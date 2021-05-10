@@ -5,7 +5,6 @@ AllTests-mainnet
 + BASE_REWARD_FACTOR                                64                   [Preset: mainnet]   OK
 + BLS_WITHDRAWAL_PREFIX                             "0x00"               [Preset: mainnet]   OK
 + CHURN_LIMIT_QUOTIENT                              65536                [Preset: mainnet]   OK
-  CONFIG_NAME                                       "mainnet"            [Preset: mainnet]   Skip
 + DEPOSIT_CHAIN_ID                                  1                    [Preset: mainnet]   OK
   DEPOSIT_CONTRACT_ADDRESS                          "0x00000000219ab540356cBB839Cbe05303d770 Skip
 + DEPOSIT_NETWORK_ID                                1                    [Preset: mainnet]   OK
@@ -63,7 +62,7 @@ AllTests-mainnet
 + VALIDATOR_REGISTRY_LIMIT                          1099511627776        [Preset: mainnet]   OK
 + WHISTLEBLOWER_REWARD_QUOTIENT                     512                  [Preset: mainnet]   OK
 ```
-OK: 53/60 Fail: 0/60 Skip: 7/60
+OK: 53/59 Fail: 0/59 Skip: 6/59
 ## Attestation pool processing [Preset: mainnet]
 ```diff
 + Attestations may arrive in any order [Preset: mainnet]                                     OK

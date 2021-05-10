@@ -24,9 +24,7 @@ import
 # ----------------------------------------------------------------
 
 const
-  # TODO remove once merge test vectors have more than ssz_static
-  SszTestsDirMerge = FixturesDir / "tests-v1.1.0-alpha.4-pre1"
-  SSZDir = SszTestsDirMerge/const_preset/"merge"/"ssz_static"
+  SSZDir = SszTestsDir/const_preset/"merge"/"ssz_static"
   MAX_OBJECT_SIZE = 10_000_000
 
 type

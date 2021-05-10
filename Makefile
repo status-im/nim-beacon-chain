@@ -152,6 +152,7 @@ XML_TEST_BINARIES := \
 	test_fixture_const_sanity_check_mainnet \
 	test_fixture_ssz_generic_types \
 	test_fixture_ssz_consensus_objects \
+	all_fixtures_require_ssz \
 	test_official_interchange_vectors \
 	all_tests \
 	test_keystore
@@ -197,6 +198,15 @@ test_fixture_ssz_consensus_objects: | build deps
 			$@ \
 			"tests/official/$@.nim" \
 			$(NIM_PARAMS) -d:chronicles_log_level=TRACE -d:chronicles_sinks="json[file]" && \
+		echo -e $(BUILD_END_MSG) "build/$@"
+
+# EF tests
+all_fixtures_require_ssz: | build deps
+	+ echo -e $(BUILD_MSG) "build/$@" && \
+		MAKE="$(MAKE)" V="$(V)" $(ENV_SCRIPT) scripts/compile_nim_program.sh \
+			$@ \
+			"tests/official/$@.nim" \
+			$(NIM_PARAMS) -d:chronicles_log_level=TRACE -d:const_preset=mainnet -d:chronicles_sinks="json[file]" && \
 		echo -e $(BUILD_END_MSG) "build/$@"
 
 # EIP-3076 - Slashing interchange
