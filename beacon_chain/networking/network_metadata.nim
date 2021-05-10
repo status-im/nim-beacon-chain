@@ -197,7 +197,7 @@ template eth2testnet(path: string): Eth2NetworkMetadata =
 const
   pyrmontMetadata* = eth2testnet "shared/pyrmont"
   praterMetadata* = eth2testnet "shared/prater"
-  stekloMetadata* = eth2testnet "shared/rayonism/steklo"
+  nocturneMetadata* = eth2testnet "shared/rayonism/nocturne"
 
 {.pop.} # the following pocedures raise more than just `Defect`
 
@@ -210,8 +210,8 @@ proc getMetadataForNetwork*(networkName: string): Eth2NetworkMetadata =
         pyrmontMetadata
       of "prater":
         praterMetadata
-      of "steklo":
-        stekloMetadata
+      of "nocturne":
+        nocturneMetadata
       else:
         if fileExists(networkName):
           try:
