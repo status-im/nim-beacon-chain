@@ -8,6 +8,7 @@ import
   stew/[results, base10],
   chronicles,
   nimcrypto/utils as ncrutils,
+  presto/client as presto_client,
   ../beacon_node_common, ../networking/eth2_network,
   ../consensus_object_pools/[blockchain_dag, exit_pool, statedata_helpers],
   ../gossip_processing/gossip_validation,
@@ -935,3 +936,18 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
     "/eth/v1/beacon/pool/voluntary_exits",
     "/api/eth/v1/beacon/pool/voluntary_exits"
   )
+
+# proc getBeaconGenesis*(): RestResponse[BeaconGenesisTuple] {.
+#      rest, endpoint: "/api/eth/v1/beacon/genesis",
+#      meth: MethodGet.}
+#   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getGenesis
+
+# proc getStateFork*(state_id: string): RestResponse[Fork] {.
+#      rest, endpoint: "/api/eth/v1/beacon/states/{state_id}/fork",
+#      meth: MethodGet.}
+#   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateFork
+
+proc publishBlock*(body: SignedBeaconBlock): RestStatus {.
+     rest, endpoint: "/eth/v1/beacon/blocks",
+     meth: MethodPost.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/publishBlock

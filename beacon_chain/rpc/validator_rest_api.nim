@@ -411,3 +411,22 @@ proc installValidatorApiHandlers*(router: var RestRouter, node: BeaconNode) =
     "/eth/v1/validator/beacon_committee_subscriptions",
     "/api/eth/v1/validator/beacon_committee_subscriptions"
   )
+
+proc getProposerDuties(epoch: Epoch): RestResponse[
+                                                  seq[RestProposerDutyTuple]] {.
+     rest, endpoint: "/api/eth/v1/validator/duties/proposer/{epoch}",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Validator/getProposerDuties
+
+proc getAttesterDuties(epoch: Epoch): RestResponse[
+                                                  seq[RestAttesterDutyTuple]] {.
+     rest, endpoint: "/api/eth/v1/validator/duties/attester/{epoch}",
+     meth: MethodPost.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Validator/getAttesterDuties
+
+proc produceBlock*(slot: Slot, randao_reveal: Option[ValidatorSig],
+                   graffiti: Option[GraffitiBytes]): RestResponse[
+                                                                 BeaconBlock] {.
+     rest, endpoint: "/api/eth/v1/validator/blocks/{slot}",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Validator/produceBlock

@@ -23,8 +23,8 @@ proc jsonResponseWRoot*(t: typedesc[RestApiResponse],
   writer.writeField("dependent_root", dependent_root)
   writer.writeField("data", data)
   writer.endRecord()
-  ok(ContentBody(contentType: "application/json",
-                 data: stream.getOutput(seq[byte])))
+  RestApiResponse.response(stream.getOutput(seq[byte]), Http200,
+                           "application/json")
 
 proc jsonResponse*(t: typedesc[RestApiResponse],
                    data: auto): RestApiResponse =
@@ -33,8 +33,8 @@ proc jsonResponse*(t: typedesc[RestApiResponse],
   writer.beginRecord()
   writer.writeField("data", data)
   writer.endRecord()
-  ok(ContentBody(contentType: "application/json",
-                 data: stream.getOutput(seq[byte])))
+  RestApiResponse.response(stream.getOutput(seq[byte]), Http200,
+                           "application/json")
 
 proc jsonResponseWMeta*(t: typedesc[RestApiResponse],
                         data: auto, meta: auto): RestApiResponse =
@@ -44,8 +44,8 @@ proc jsonResponseWMeta*(t: typedesc[RestApiResponse],
   writer.writeField("data", data)
   writer.writeField("meta", meta)
   writer.endRecord()
-  ok(ContentBody(contentType: "application/json",
-                 data: stream.getOutput(seq[byte])))
+  RestApiResponse.response(stream.getOutput(seq[byte]), Http200,
+                           "application/json")
 
 proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
                 msg: string = "", stacktrace: string = ""): RestApiResponse =
