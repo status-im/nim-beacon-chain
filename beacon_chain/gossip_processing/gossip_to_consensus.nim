@@ -16,8 +16,6 @@ import
   ../ssz/sszdump,
   ../eth1/eth1_monitor
 
-import ../beacon_chain_db
-
 # Gossip Queue Manager
 # ------------------------------------------------------------------------------
 # The queue manager moves blocks from "Gossip validated" to "Consensus verified"

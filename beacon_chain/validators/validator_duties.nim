@@ -366,10 +366,12 @@ proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
         executionPayload,
         restore,
         cache)
-    except CatchableError as err:
+    except CancelledError as exc:
+      raise exc
+    except CatchableError as exc:
       # TODO in theory, this could be from the makeBeaconBlock expression
       error "consensus_assembleBlock failed",
-        err = err.msg
+        exc = exc.msg
       return none(BeaconBlock)
 
 proc proposeSignedBlock*(node: BeaconNode,
