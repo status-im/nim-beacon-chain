@@ -302,13 +302,8 @@ proc getExecutionPayload(node: BeaconNode, state: BeaconState):
   let
     execution_parent_hash = state.latest_execution_payload_header.block_hash
     timestamp = compute_time_at_slot(state, state.slot)
-
-  let
     executionPayloadRPC = await node.web3Provider.assembleBlock(
       execution_parent_hash, timestamp)
-    # TODO a bunch of this depends on Keccak len being same as Eth2Digest
-  let
-    # this doesn't work if there's an error returned
     executionPayload = ExecutionPayload(
       block_hash: Eth2Digest.fromHex(executionPayloadRPC.blockHash),
       parent_hash: Eth2Digest.fromHex(executionPayloadRPC.parentHash),
@@ -352,22 +347,30 @@ proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
       doAssert v.addr == addr proposalStateAddr.data
       assign(proposalStateAddr[], poolPtr.headState)
 
-    return makeBeaconBlock(
-      node.runtimePreset,
-      hashedState,
-      validator_index,
-      head.root,
-      randao_reveal,
-      eth1Proposal.vote,
-      graffiti,
-      node.attestationPool[].getAttestationsForBlock(state, cache),
-      eth1Proposal.deposits,
-      node.exitPool[].getProposerSlashingsForBlock(),
-      node.exitPool[].getAttesterSlashingsForBlock(),
-      node.exitPool[].getVoluntaryExitsForBlock(),
-      await node.getExecutionPayload(state),
-      restore,
-      cache)
+    try:
+      let executionPayload = await node.getExecutionPayload(state)
+
+      return makeBeaconBlock(
+        node.runtimePreset,
+        hashedState,
+        validator_index,
+        head.root,
+        randao_reveal,
+        eth1Proposal.vote,
+        graffiti,
+        node.attestationPool[].getAttestationsForBlock(state, cache),
+        eth1Proposal.deposits,
+        node.exitPool[].getProposerSlashingsForBlock(),
+        node.exitPool[].getAttesterSlashingsForBlock(),
+        node.exitPool[].getVoluntaryExitsForBlock(),
+        executionPayload,
+        restore,
+        cache)
+    except CatchableError as err:
+      # TODO in theory, this could be from the makeBeaconBlock expression
+      error "consensus_assembleBlock failed",
+        err = err.msg
+      return none(BeaconBlock)
 
 proc proposeSignedBlock*(node: BeaconNode,
                          head: BlockRef,
