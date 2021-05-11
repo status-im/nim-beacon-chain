@@ -1068,17 +1068,20 @@ proc startEth1Syncing(m: Eth1Monitor, delayBeforeStart: Duration) {.async.} =
   m.dataProvider = dataProviderRes.tryGet()
   let web3 = m.dataProvider.web3
 
-  if m.state == Initialized and m.eth1Network.isSome:
-    let
-      providerNetwork = awaitWithRetries web3.provider.net_version()
-      expectedNetwork = case m.eth1Network.get
-        of mainnet: "1"
-        of rinkeby: "4"
-        of goerli:  "5"
-    if expectedNetwork != providerNetwork:
-      fatal "The specified web3 provider serves data for a different network",
-             expectedNetwork, providerNetwork
-      quit 1
+  block checkNetworkCompatibility:
+    if m.state == Initialized and m.eth1Network.isSome:
+      let
+        providerNetwork = awaitWithRetries web3.provider.net_version()
+        expectedNetwork = case m.eth1Network.get
+          of mainnet: "1"
+          of rinkeby: "4"
+          of goerli:  "5"
+          of customEth1Network:
+            break checkNetworkCompatibility
+      if expectedNetwork != providerNetwork:
+        fatal "The specified web3 provider serves data for a different network",
+               expectedNetwork, providerNetwork
+        quit 1
 
   m.state = Started
 

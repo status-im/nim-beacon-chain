@@ -38,6 +38,7 @@ type
     mainnet
     rinkeby
     goerli
+    customEth1Network
 
   PresetIncompatible* = object of CatchableError
 
@@ -111,7 +112,8 @@ proc extractRuntimePreset*(configPath: string, configData: PresetFile): RuntimeP
                    $name & " = " & value.string
       raise newException(PresetIncompatible, errMsg)
 
-proc loadEth2NetworkMetadata*(path: string): Eth2NetworkMetadata
+proc loadEth2NetworkMetadata*(path: string,
+                              eth1Network: Eth1Network): Eth2NetworkMetadata
                              {.raises: [CatchableError, Defect].} =
   try:
     let
@@ -159,7 +161,7 @@ proc loadEth2NetworkMetadata*(path: string): Eth2NetworkMetadata
 
     Eth2NetworkMetadata(
       incompatible: false,
-      eth1Network: some goerli,
+      eth1Network: some eth1Network,
       runtimePreset: runtimePreset,
       bootstrapNodes: bootstrapNodes,
       depositContractAddress: depositContractAddress,
@@ -191,13 +193,13 @@ const
       incompatibilityDesc: "This build is compiled with the " & const_preset & " const preset. " &
                            "It's not compatible with mainnet")
 
-template eth2testnet(path: string): Eth2NetworkMetadata =
-  loadEth2NetworkMetadata(eth2testnetsDir & "/" & path)
+template eth2testnet(path: string, eth1Network = goerli): Eth2NetworkMetadata =
+  loadEth2NetworkMetadata(eth2testnetsDir & "/" & path, eth1Network)
 
 const
   pyrmontMetadata* = eth2testnet "shared/pyrmont"
   praterMetadata* = eth2testnet "shared/prater"
-  nocturneMetadata* = eth2testnet "shared/rayonism/nocturne"
+  nocturneMetadata* = eth2testnet("shared/rayonism/nocturne", customEth1Network)
 
 {.pop.} # the following pocedures raise more than just `Defect`
 
