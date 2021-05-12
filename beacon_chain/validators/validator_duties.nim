@@ -751,9 +751,15 @@ proc handleValidatorDuties*(node: BeaconNode, lastSlot, slot: Slot) {.async.} =
     node.consensusManager[].updateHead(slot)
     head = node.chainDag.head
     if oldHead != head:
-      info "calling RPC node.eth1Monitor.setHead",
-        head = head.root
-      doAssert (await node.web3Provider.setHead(head.root)).success
+      debug "calling RPC node.eth1Monitor.setHead", head = head.root
+      try:
+        let setHeadRes = await node.web3Provider.setHead(head.root)
+        if not setHeadRes.success:
+          warn "The execution layer refused to update its head block",
+                head = head.root
+      except CatchableError as err:
+        warn "Failed to update the execution layer head block",
+              head = head.root, err = err.msg
 
   handleAttestations(node, head, slot)
 

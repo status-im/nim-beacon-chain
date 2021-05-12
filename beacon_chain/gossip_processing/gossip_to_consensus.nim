@@ -242,8 +242,10 @@ proc processBlock(self: var VerifQueueManager, entry: BlockEntry): bool =
 
 proc newBlock(consensusManager: ref ConsensusManager, executionPayload: ExecutionPayload):
     Future[bool] {.async.} =
-  return (await consensusManager.web3Provider.newBlock(executionPayload)).
-    valid
+  try:
+    return await(consensusManager.web3Provider.newBlock(executionPayload)).valid
+  except CatchableError:
+    return false
 
 proc executionPayloadSync(
     consensusManager: ref ConsensusManager, blck: BeaconBlock) {.async.} =

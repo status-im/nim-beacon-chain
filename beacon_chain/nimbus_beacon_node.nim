@@ -341,7 +341,7 @@ proc init*(T: type BeaconNode,
     validatorPool = newClone(ValidatorPool.init(slashingProtectionDB))
 
     # TODO waitFor etc. This is temporary init code, so fine for now
-    web3Provider =  waitFor newWeb3DataProvider(depositContractAddress, config.web3Urls[0])
+    web3Provider = waitFor newWeb3DataProvider(depositContractAddress, config.web3Urls[0])
 
     consensusManager = ConsensusManager.new(
       chainDag, attestationPool, quarantine, web3Provider.get
