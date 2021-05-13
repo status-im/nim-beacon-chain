@@ -242,6 +242,9 @@ proc processBlock(self: var VerifQueueManager, entry: BlockEntry): bool =
 
 proc newBlock(consensusManager: ref ConsensusManager, executionPayload: ExecutionPayload):
     Future[bool] {.async.} =
+  debug "newBlock: inserting block into execution engine",
+    parent_hash = executionPayload.parent_hash,
+    block_hash = executionPayload.block_hash
   try:
     return await(consensusManager.web3Provider.newBlock(executionPayload)).valid
   except CatchableError:
@@ -284,6 +287,10 @@ proc executionPayloadSync(
 
     if await consensusManager.newBlock(executionPayload):
       break
+
+    debug "executionPayloadSync: backfilling execution with consensus_newBlock",
+      parent_hash = executionPayload.parent_hash,
+      block_hash = executionPayload.block_hash
 
     # This payload didn't apply either, so queue it up to be applied once the
     # newest applicable execution payload is found.

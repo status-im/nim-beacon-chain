@@ -298,10 +298,16 @@ proc getExecutionPayload(node: BeaconNode, state: BeaconState):
     # obviously incorrect
     parseHexInt(x).uint64
 
-  # Post-merge, normal payload
   let
     execution_parent_hash = state.latest_execution_payload_header.block_hash
     timestamp = compute_time_at_slot(state, state.slot)
+
+  debug "getExecutionPayload: requesting execution payload for block proposal with consensus_assembleBlock",
+    execution_parent_hash,
+    timestamp
+
+  # Post-merge, normal payload
+  let
     executionPayloadRPC = await node.web3Provider.assembleBlock(
       execution_parent_hash, timestamp)
     executionPayload = ExecutionPayload(
