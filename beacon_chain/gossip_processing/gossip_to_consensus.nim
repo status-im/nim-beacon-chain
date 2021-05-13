@@ -240,79 +240,6 @@ proc processBlock(self: var VerifQueueManager, entry: BlockEntry): bool =
       entry.v.resFut.complete(Result[void, BlockError].err(res.error()))
     false
 
-proc newBlock(consensusManager: ref ConsensusManager, executionPayload: ExecutionPayload):
-    Future[bool] {.async.} =
-  debug "newBlock: inserting block into execution engine",
-    parent_hash = executionPayload.parent_hash,
-    block_hash = executionPayload.block_hash
-  try:
-    return await(consensusManager.web3Provider.newBlock(executionPayload)).valid
-  except CatchableError:
-    return false
-
-proc executionPayloadSync(
-    consensusManager: ref ConsensusManager, blck: BeaconBlock) {.async.} =
-  # storeBlock() has already run, so already in database, if resolved. Blocks
-  # not resolved should not get their execution payloads added, either way. A
-  # way of looking at this is as a kind of eth1-block-sync in terms of future
-  # refactoring. Notably, newBlock doesnt matter until assembleBlock. It thus
-  # isn't required to be completely synchronized all the time, only close, so
-  # that assembleBlock can be guaranteed to catch up, in a reasonably bounded
-  # time frame.
-
-  # Fast-path out. Maybe it just works and the execution engine was already
-  # synced. This should be the usual case.
-  if await consensusManager.newBlock(blck.body.execution_payload):
-    return
-
-  # Execution engine rejected block, so backfill execution engine.
-  var
-    executionPayloads = @[blck.body.execution_payload]
-    root = blck.parent_root
-
-  # ChainDAG might get pruned, but need to go back to Eth1 root, so access
-  # database. While this is potentially unbounded, it practically will not
-  # occur outside a single initialization step or the execution engine has
-  # not been maintaining reliable connections with Nimbus.
-  #
-  # This loop enqueues execution payloads which don't yet apply, until it
-  # finds one which does, at which point all those queued payloads apply.
-  while true:
-    let blockData = consensusManager.chainDag.get(root)
-
-    if blockData.isNone:
-      discard
-
-    let executionPayload = blockData.get.data.message.body.execution_payload
-
-    if await consensusManager.newBlock(executionPayload):
-      break
-
-    debug "executionPayloadSync: backfilling execution with consensus_newBlock",
-      parent_hash = executionPayload.parent_hash,
-      block_hash = executionPayload.block_hash
-
-    # This payload didn't apply either, so queue it up to be applied once the
-    # newest applicable execution payload is found.
-    executionPayloads.add executionPayload
-
-    # Might run out of execution-layer chain...
-    if executionPayload.parent_hash == default(Eth2Digest) or
-        executionpayload.blockhash == default(Eth2Digest):
-      break
-
-    # ... or consensus-layer chain.
-    root = blockData.get.data.message.parent_root
-    if root == default(Eth2Digest):
-      break
-
-  # executionPayloads is ordered from newest to oldest, but execution payloads
-  # must be applied oldest to newest.
-  doAssert executionPayloads.len > 0
-  for i in countdown(executionPayloads.len - 1, 0):
-    if not await consensusManager.newBlock(executionPayloads[i]):
-      break  # TODO could detect pathological failure loops here
-
 proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
   while true:
     # Cooperative concurrency: one block per loop iteration - because
@@ -330,4 +257,5 @@ proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
 
     let blck = await self[].blocksQueue.popFirst()
     if self[].processBlock(blck):
-      await self.consensusManager.executionPayloadSync(blck.v.blk.message)
+      await self.consensusManager.chainDag.executionPayloadSync(
+        self.consensusManager.web3Provider, blck.v.blk.message)

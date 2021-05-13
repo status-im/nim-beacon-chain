@@ -622,7 +622,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
       node.network.broadcast(getBeaconBlocksTopic(node.forkDigest), blck)
       return RestApiResponse.jsonError(Http202, BlockValidationError)
     else:
-      let res = proposeSignedBlock(node, head, AttachedValidator(), blck)
+      let res = await proposeSignedBlock(node, head, AttachedValidator(), blck)
       if res == head:
         node.network.broadcast(getBeaconBlocksTopic(node.forkDigest), blck)
         return RestApiResponse.jsonError(Http202, BlockValidationError)

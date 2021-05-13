@@ -383,7 +383,8 @@ proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
 proc proposeSignedBlock*(node: BeaconNode,
                          head: BlockRef,
                          validator: AttachedValidator,
-                         newBlock: SignedBeaconBlock): BlockRef =
+                         newBlock: SignedBeaconBlock):
+                         Future[BlockRef] {.async.} =
   let newBlockRef = node.chainDag.addRawBlock(node.quarantine, newBlock) do (
       blckRef: BlockRef, trustedBlock: TrustedSignedBeaconBlock,
       epochRef: EpochRef, state: HashedBeaconState):
@@ -398,6 +399,8 @@ proc proposeSignedBlock*(node: BeaconNode,
       blockRoot = shortLog(newBlock.root)
 
     return head
+
+  await node.chainDag.executionPayloadSync(node.web3Provider, newBlock.message)
 
   notice "Block proposed",
     blck = shortLog(newBlock.message),
@@ -463,7 +466,7 @@ proc proposeBlock(node: BeaconNode,
   newBlock.signature = await validator.signBlockProposal(
     fork, genesis_validators_root, slot, newBlock.root)
 
-  return node.proposeSignedBlock(head, validator, newBlock)
+  return await node.proposeSignedBlock(head, validator, newBlock)
 
 proc handleAttestations(node: BeaconNode, head: BlockRef, slot: Slot) =
   ## Perform all attestations that the validators attached to this node should

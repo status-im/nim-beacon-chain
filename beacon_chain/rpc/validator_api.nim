@@ -55,7 +55,7 @@ proc installValidatorApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
     if head.slot >= body.message.slot:
       raise newException(CatchableError,
         "Proposal is for a past slot: " & $body.message.slot)
-    if head == proposeSignedBlock(node, head, AttachedValidator(), body):
+    if head == await proposeSignedBlock(node, head, AttachedValidator(), body):
       raise newException(CatchableError, "Could not propose block")
     return true
 
