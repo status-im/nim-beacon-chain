@@ -21,7 +21,6 @@ import
 
   # Local modules
   ../spec/[
-    datatypes, digest, crypto, helpers, network, signatures, state_transition],
     datatypes, digest, crypto, helpers, network, signatures, state_transition,
     state_transition_block, validator],
   ../conf, ../beacon_clock,

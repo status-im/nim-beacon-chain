@@ -264,9 +264,10 @@ OK: 1/1 Fail: 0/1 Skip: 0/1
 + [SyncQueue] checkResponse() test                                                           OK
 + [SyncQueue] contains() test                                                                OK
 + [SyncQueue] getLastNonEmptySlot() test                                                     OK
++ [SyncQueue] getRewindPoint() test                                                          OK
 + [SyncQueue] hasEndGap() test                                                               OK
 ```
-OK: 13/13 Fail: 0/13 Skip: 0/13
+OK: 14/14 Fail: 0/14 Skip: 0/14
 ## Zero signature sanity checks
 ```diff
 + SSZ serialization roundtrip of SignedBeaconBlockHeader                                     OK
@@ -320,4 +321,4 @@ OK: 3/3 Fail: 0/3 Skip: 0/3
 OK: 1/1 Fail: 0/1 Skip: 0/1
 
 ---TOTAL---
-OK: 179/188 Fail: 0/188 Skip: 9/188
+OK: 181/187 Fail: 0/187 Skip: 6/187

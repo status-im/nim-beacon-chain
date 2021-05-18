@@ -15,7 +15,8 @@ FixtureAll-mainnet
 + Rewards - full_random_3 [Preset: mainnet]                                                  OK
 + Rewards - full_random_five_epoch_leak [Preset: mainnet]                                    OK
 + Rewards - full_random_leak [Preset: mainnet]                                               OK
-+ Rewards - full_random_low_balances [Preset: mainnet]                                       OK
++ Rewards - full_random_low_balances_0 [Preset: mainnet]                                     OK
++ Rewards - full_random_low_balances_1 [Preset: mainnet]                                     OK
 + Rewards - full_random_misc_balances [Preset: mainnet]                                      OK
 + Rewards - full_random_ten_epoch_leak [Preset: mainnet]                                     OK
 + Rewards - half_full [Preset: mainnet]                                                      OK
@@ -173,7 +174,7 @@ FixtureAll-mainnet
 + [Valid]   success_surround                                                                 OK
 + [Valid]   success_with_effective_balance_disparity                                         OK
 ```
-OK: 170/170 Fail: 0/170 Skip: 0/170
+OK: 171/171 Fail: 0/171 Skip: 0/171
 ## Official - Epoch Processing - Effective balance updates [Preset: mainnet]
 ```diff
 + Effective balance updates - effective_balance_hysteresis [Preset: mainnet]                 OK
@@ -235,4 +236,4 @@ OK: 4/4 Fail: 0/4 Skip: 0/4
 OK: 1/1 Fail: 0/1 Skip: 0/1
 
 ---TOTAL---
-OK: 197/197 Fail: 0/197 Skip: 0/197
+OK: 198/198 Fail: 0/198 Skip: 0/198
