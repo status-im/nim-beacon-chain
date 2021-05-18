@@ -548,7 +548,8 @@ type
     of VCNoCommand:
       graffiti* {.
         desc: "The graffiti value that will appear in proposed blocks. " &
-              "You can use a 0x-prefixed hex encoded string to specify raw bytes"
+              "You can use a 0x-prefixed hex encoded string to specify " &
+              "raw bytes"
         name: "graffiti" }: Option[GraffitiBytes]
 
       stopAtEpoch* {.
@@ -556,21 +557,14 @@ type
         defaultValue: 0
         name: "stop-at-epoch" }: uint64
 
-      rpcPort* {.
-        desc: "HTTP port of the server to connect to for RPC"
-        defaultValue: defaultEth2RpcPort
-        defaultValueDesc: "9190"
-        name: "rpc-port" }: Port
-
-      rpcAddress* {.
-        desc: "Address of the server to connect to for RPC"
-        defaultValue: init(ValidIpAddress, "127.0.0.1")
-        defaultValueDesc: "127.0.0.1"
-        name: "rpc-address" }: ValidIpAddress
+      beaconNodes* {.
+        desc: "URL addresses to one or more beacon node HTTP REST APIs",
+        name: "beacon-nodes" }: seq[string]
 
       retryDelay* {.
-        desc: "Delay in seconds between retries after unsuccessful attempts to connect to a beacon node [=10]"
         defaultValue: 10
+        desc: "Delay in seconds between retries after unsuccessful " &
+              "attempts to connect to a beacon node [=10]"
         name: "retry-delay" }: int
 
 proc defaultDataDir*(config: BeaconNodeConf|ValidatorClientConf): string =

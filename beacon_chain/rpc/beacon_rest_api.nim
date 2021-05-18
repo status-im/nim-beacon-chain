@@ -951,3 +951,34 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
     "/eth/v1/beacon/pool/voluntary_exits",
     "/api/eth/v1/beacon/pool/voluntary_exits"
   )
+
+proc getBeaconGenesis*(): RestResponse[DataRestBeaconGenesis] {.
+     rest, endpoint: "/api/eth/v1/beacon/genesis",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getGenesis
+
+proc getStateFork*(state_id: StateIdent): RestResponse[DataRestFork] {.
+     rest, endpoint: "/api/eth/v1/beacon/states/{state_id}/fork",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateFork
+
+proc publishBlock*(body: SignedBeaconBlock): RestStatus {.
+     rest, endpoint: "/eth/v1/beacon/blocks",
+     meth: MethodPost.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/publishBlock
+
+proc getStateValidator*(state_id: StateIdent,
+                        validator_id: ValidatorIdent
+                       ): RestResponse[DataRestValidatorTuple] {.
+     rest,
+     endpoint: "/api/eth/v1/beacon/states/{state_id}/validators/{validator_id}",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateValidator
+
+proc getStateValidators*(state_id: StateIdent,
+                         id: seq[ValidatorIdent]
+                        ): RestResponse[DataRestValidatorTupleList] {.
+     rest,
+     endpoint: "/api/eth/v1/beacon/states/{state_id}/validators",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateValidators

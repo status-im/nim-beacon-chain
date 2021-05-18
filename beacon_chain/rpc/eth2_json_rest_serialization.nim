@@ -7,12 +7,68 @@ import
   nimcrypto/utils as ncrutils,
   ../beacon_node_common, ../networking/eth2_network,
   ../consensus_object_pools/[blockchain_dag, exit_pool],
-  ../spec/[crypto, digest, datatypes],
+  ../spec/[crypto, digest, datatypes, eth2_apis/callsigs_types],
   ../ssz/merkleization,
   rest_utils
 export json_serialization
 
 Json.createFlavor RestJson
+
+type
+  RestAttesterDutyTuple* = tuple
+    pubkey: ValidatorPubKey
+    validator_index: ValidatorIndex
+    committee_index: CommitteeIndex
+    committee_length: uint64
+    committees_at_slot: uint64
+    validator_committee_index: ValidatorIndex
+    slot: Slot
+
+  RestProposerDutyTuple* = tuple
+    pubkey: ValidatorPubKey
+    validator_index: ValidatorIndex
+    slot: Slot
+
+  RestCommitteeSubscriptionTuple* = tuple
+    validator_index: ValidatorIndex
+    committee_index: CommitteeIndex
+    committees_at_slot: uint64
+    slot: Slot
+    is_aggregator: bool
+
+  RestBeaconGenesisTuple* = tuple
+    genesis_time: uint64
+    genesis_validators_root: Eth2Digest
+    genesis_fork_version: Version
+
+  RestValidatorTuple* = tuple
+    index: ValidatorIndex
+    balance: string
+    status: string
+    validator: Validator
+
+  DataEnclosedObject*[T] = object
+    data*: T
+
+  DataRestBeaconGenesis* = DataEnclosedObject[RestBeaconGenesisTuple]
+  DataRestFork* = DataEnclosedObject[Fork]
+  DataRestProposerDuties* = DataEnclosedObject[seq[RestProposerDutyTuple]]
+  DataRestAttesterDuties* = DataEnclosedObject[seq[RestAttesterDutyTuple]]
+  DataRestBeaconBlock* = DataEnclosedObject[BeaconBlock]
+  DataRestAttestationData* = DataEnclosedObject[AttestationData]
+  DataRestAttestation* = DataEnclosedObject[Attestation]
+  DataRestSyncInfo* = DataEnclosedObject[SyncInfo]
+  DataRestValidatorTuple* = DataEnclosedObject[RestValidatorTuple]
+  DataRestValidatorTupleList* = DataEnclosedObject[seq[RestValidatorTuple]]
+
+  EncodeTypes* = SignedBeaconBlock | seq[ValidatorIndex] |
+                 seq[AttestationData] | seq[SignedAggregateAndProof] |
+                 seq[RestCommitteeSubscriptionTuple]
+  DecodeTypes* = DataRestBeaconGenesis | DataRestFork | DataRestProposerDuties |
+                 DataRestAttesterDuties | DataRestBeaconBlock |
+                 DataRestAttestationData | DataRestAttestation |
+                 DataRestSyncInfo | DataRestValidatorTuple |
+                 DataRestValidatorTupleList
 
 proc jsonResponseWRoot*(t: typedesc[RestApiResponse],
                         data: auto,
@@ -354,3 +410,68 @@ RestJson.useCustomSerialization(BeaconState.justification_bits):
                           "The `justification_bits` value must be a hex string")
   write:
     writer.writeValue "0x" & toHex([value])
+
+proc encodeBytes*[T: EncodeTypes](value: T,
+                                  contentType: string): RestResult[seq[byte]] =
+  case contentType
+  of "application/json":
+    var stream = memoryOutput()
+    var writer = JsonWriter[RestJson].init(stream)
+    writer.beginRecord()
+    writer.writeField("data", value)
+    writer.endRecord()
+    ok(stream.getOutput(seq[byte]))
+  else:
+    err("Content-Type not supported")
+
+proc decodeBytes*[T: DecodeTypes](t: typedesc[T], value: openarray[byte],
+                                  contentType: string): RestResult[T] =
+  case contentType
+  of "application/json":
+    let res =
+      try:
+        RestJson.decode(value, T)
+      except SerializationError:
+        return err("Serialization error")
+    ok(res)
+  else:
+    err("Content-Type not supported")
+
+proc encodeString*(value: string): RestResult[string] =
+  ok(value)
+
+proc encodeString*(value: Epoch|Slot|CommitteeIndex): RestResult[string] =
+  ok(Base10.toString(uint64(value)))
+
+proc encodeString*(value: ValidatorSig): RestResult[string] =
+  ok(hexOriginal(toRaw(value)))
+
+proc encodeString*(value: GraffitiBytes): RestResult[string] =
+  ok(hexOriginal(distinctBase(value)))
+
+proc encodeString*(value: Eth2Digest): RestResult[string] =
+  ok(hexOriginal(value.data))
+
+proc encodeString*(value: ValidatorIdent): RestResult[string] =
+  case value.kind
+  of ValidatorQueryKind.Index:
+    ok(Base10.toString(uint64(value.index)))
+  of ValidatorQueryKind.Key:
+    ok(hexOriginal(toRaw(value.key)))
+
+proc encodeString*(value: StateIdent): RestResult[string] =
+  case value.kind
+  of StateQueryKind.Slot:
+    ok(Base10.toString(uint64(value.slot)))
+  of StateQueryKind.Root:
+    ok(hexOriginal(value.root.data))
+  of StateQueryKind.Named:
+    case value.value
+    of StateIdentType.Head:
+      ok("head")
+    of StateIdentType.Genesis:
+      ok("genesis")
+    of StateIdentType.Finalized:
+      ok("finalized")
+    of StateIdentType.Justified:
+      ok("justified")
