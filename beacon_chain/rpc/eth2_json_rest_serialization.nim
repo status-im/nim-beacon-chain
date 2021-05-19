@@ -47,6 +47,70 @@ type
     status: string
     validator: Validator
 
+  RestVersionTuple* = tuple
+    version: string
+
+  RestConfigTuple* = tuple
+    MAX_COMMITTEES_PER_SLOT: uint64
+    TARGET_COMMITTEE_SIZE: uint64
+    MAX_VALIDATORS_PER_COMMITTEE: uint64
+    MIN_PER_EPOCH_CHURN_LIMIT: uint64
+    CHURN_LIMIT_QUOTIENT: uint64
+    SHUFFLE_ROUND_COUNT: uint64
+    MIN_GENESIS_ACTIVE_VALIDATOR_COUNT: uint64
+    MIN_GENESIS_TIME: uint64
+    HYSTERESIS_QUOTIENT: uint64
+    HYSTERESIS_DOWNWARD_MULTIPLIER: uint64
+    HYSTERESIS_UPWARD_MULTIPLIER: uint64
+    SAFE_SLOTS_TO_UPDATE_JUSTIFIED: uint64
+    ETH1_FOLLOW_DISTANCE: uint64
+    TARGET_AGGREGATORS_PER_COMMITTEE: uint64
+    RANDOM_SUBNETS_PER_VALIDATOR: uint64
+    EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION: uint64
+    SECONDS_PER_ETH1_BLOCK: uint64
+    DEPOSIT_CHAIN_ID: uint64
+    DEPOSIT_NETWORK_ID: uint64
+    DEPOSIT_CONTRACT_ADDRESS: Eth1Address
+    MIN_DEPOSIT_AMOUNT: uint64
+    MAX_EFFECTIVE_BALANCE: uint64
+    EJECTION_BALANCE: uint64
+    EFFECTIVE_BALANCE_INCREMENT: uint64
+    GENESIS_FORK_VERSION: Version
+    BLS_WITHDRAWAL_PREFIX: byte
+    GENESIS_DELAY: uint64
+    SECONDS_PER_SLOT: uint64
+    MIN_ATTESTATION_INCLUSION_DELAY: uint64
+    SLOTS_PER_EPOCH: uint64
+    MIN_SEED_LOOKAHEAD: uint64
+    MAX_SEED_LOOKAHEAD: uint64
+    EPOCHS_PER_ETH1_VOTING_PERIOD: uint64
+    SLOTS_PER_HISTORICAL_ROOT: uint64
+    MIN_VALIDATOR_WITHDRAWABILITY_DELAY: uint64
+    SHARD_COMMITTEE_PERIOD: uint64
+    MIN_EPOCHS_TO_INACTIVITY_PENALTY: uint64
+    EPOCHS_PER_HISTORICAL_VECTOR: uint64
+    EPOCHS_PER_SLASHINGS_VECTOR: uint64
+    HISTORICAL_ROOTS_LIMIT: uint64
+    VALIDATOR_REGISTRY_LIMIT: uint64
+    BASE_REWARD_FACTOR: uint64
+    WHISTLEBLOWER_REWARD_QUOTIENT: uint64
+    PROPOSER_REWARD_QUOTIENT: uint64
+    INACTIVITY_PENALTY_QUOTIENT: uint64
+    MIN_SLASHING_PENALTY_QUOTIENT: uint64
+    PROPORTIONAL_SLASHING_MULTIPLIER: uint64
+    MAX_PROPOSER_SLASHINGS: uint64
+    MAX_ATTESTER_SLASHINGS: uint64
+    MAX_ATTESTATIONS: uint64
+    MAX_DEPOSITS: uint64
+    MAX_VOLUNTARY_EXITS: uint64
+    DOMAIN_BEACON_PROPOSER: array[4, byte]
+    DOMAIN_BEACON_ATTESTER: array[4, byte]
+    DOMAIN_RANDAO: array[4, byte]
+    DOMAIN_DEPOSIT: array[4, byte]
+    DOMAIN_VOLUNTARY_EXIT: array[4, byte]
+    DOMAIN_SELECTION_PROOF: array[4, byte]
+    DOMAIN_AGGREGATE_AND_PROOF: array[4, byte]
+
   DataEnclosedObject*[T] = object
     data*: T
 
@@ -60,6 +124,8 @@ type
   DataRestSyncInfo* = DataEnclosedObject[SyncInfo]
   DataRestValidatorTuple* = DataEnclosedObject[RestValidatorTuple]
   DataRestValidatorTupleList* = DataEnclosedObject[seq[RestValidatorTuple]]
+  DataRestVersionTuple* = DataEnclosedObject[RestVersionTuple]
+  DataRestConfigTuple* = DataEnclosedObject[RestConfigTuple]
 
   EncodeTypes* = SignedBeaconBlock | seq[ValidatorIndex] |
                  seq[AttestationData] | seq[SignedAggregateAndProof] |
@@ -68,7 +134,8 @@ type
                  DataRestAttesterDuties | DataRestBeaconBlock |
                  DataRestAttestationData | DataRestAttestation |
                  DataRestSyncInfo | DataRestValidatorTuple |
-                 DataRestValidatorTupleList
+                 DataRestValidatorTupleList | DataRestVersionTuple |
+                 DataRestConfigTuple
 
 proc jsonResponseWRoot*(t: typedesc[RestApiResponse],
                         data: auto,

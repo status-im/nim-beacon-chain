@@ -1,4 +1,4 @@
-import presto,
+import presto, presto/client as presto_client,
        libp2p/peerid,
        stew/[base10, byteutils],
        faststreams/[outputs],
@@ -7,7 +7,7 @@ import presto,
        ../spec/[crypto, datatypes, digest, forkedbeaconstate_helpers],
        ../beacon_node_common,
        ../consensus_object_pools/[block_pools_types, blockchain_dag]
-export blockchain_dag, presto
+export blockchain_dag, presto, presto_client
 
 const
   DecimalSet = {'0' .. '9'}
