@@ -401,20 +401,6 @@ type
   SomeSignedBeaconBlockHeader* = SignedBeaconBlockHeader | TrustedSignedBeaconBlockHeader
   SomeSignedVoluntaryExit* = SignedVoluntaryExit | TrustedSignedVoluntaryExit
 
-  # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/beacon-chain.md#executionpayloadheader
-  ExecutionPayloadHeader* = object
-    block_hash*: Eth2Digest  # Hash of execution block
-    parent_hash*: Eth2Digest
-    coinbase*: EthAddress
-    state_root*: Eth2Digest
-    number*: uint64
-    gas_limit*: uint64
-    gas_used*: uint64
-    timestamp*: uint64
-    receipt_root*: Eth2Digest
-    logs_bloom*: BloomLogs
-    transactions_root*: Eth2Digest
-
   # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#beaconstate
   # https://github.com/ethereum/eth2.0-specs/blob/eca6bd7d622a0cfb7343bff742da046ed25b3825/specs/merge/beacon-chain.md#beaconstate
   BeaconState* = object

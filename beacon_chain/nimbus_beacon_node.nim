@@ -2042,6 +2042,3 @@ programMain:
   of record: doRecord(config, rng[])
   of web3: doWeb3Cmd(config)
   of slashingdb: doSlashingInterchange(config)
-
-# get a dep in the main build
-import ./eth2_merge_web3
