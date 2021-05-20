@@ -21,7 +21,8 @@ import
 
   # Local modules
   ../spec/[
-    datatypes, digest, crypto, helpers, network, signatures, state_transition],
+    datatypes, digest, crypto, helpers, network, signatures, state_transition,
+    state_transition_block, validator],
   ../conf, ../beacon_clock,
   ../consensus_object_pools/[
     spec_cache, blockchain_dag, block_clearance,
@@ -33,6 +34,8 @@ import
   ./slashing_protection, ./attestation_aggregation,
   ./validator_pool, ./keystore_management,
   ../gossip_processing/consensus_manager
+
+import strutils
 
 # Metrics for tracking attestation and beacon block loss
 const delayBuckets = [-Inf, -4.0, -2.0, -1.0, -0.5, -0.1, -0.05,
@@ -285,6 +288,42 @@ func getOpaqueTransaction(s: string): OpaqueTransaction =
   except ValueError:
     raiseAssert "Execution engine returned invalidly formatted transaction"
 
+# https://github.com/ethereum/eth2.0-specs/blob/dev/specs/merge/validator.md#produce_execution_payload
+proc getExecutionPayload(node: BeaconNode, state: BeaconState):
+    Future[ExecutionPayload] {.async.} =
+  doAssert is_transition_completed(state)  # Rayonism
+
+  template phi(x: untyped): uint64 =
+    # obviously incorrect
+    parseHexInt(x).uint64
+
+  let
+    execution_parent_hash = state.latest_execution_payload_header.block_hash
+    timestamp = compute_time_at_slot(state, state.slot)
+
+  debug "getExecutionPayload: requesting execution payload for block proposal with consensus_assembleBlock",
+    execution_parent_hash,
+    timestamp
+
+  # Post-merge, normal payload
+  let
+    executionPayloadRPC = await node.web3Provider.assembleBlock(
+      execution_parent_hash, timestamp)
+    executionPayload = ExecutionPayload(
+      block_hash: Eth2Digest.fromHex(executionPayloadRPC.blockHash),
+      parent_hash: Eth2Digest.fromHex(executionPayloadRPC.parentHash),
+      coinbase: EthAddress.fromHex(executionPayloadRPC.miner), # this at least roundtrips things
+      state_root: Eth2Digest.fromHex(executionPayloadRPC.stateRoot),
+      number: phi(executionPayloadRPC.number),
+      gas_limit: phi(executionPayloadRPC.gasLimit),
+      gas_used: phi(executionPayloadRPC.gasUsed),
+      timestamp: phi(executionPayloadRPC.timestamp),
+      receipt_root: Eth2Digest.fromHex(executionPayloadRPC.receiptsRoot),
+      logs_bloom: BloomLogs.fromHex(executionPayloadRPC.logsBloom),
+      transactions: List[OpaqueTransaction, MAX_EXECUTION_TRANSACTIONS].init(
+        mapIt(executionPayloadRPC.transactions, it.getOpaqueTransaction)))
+  return executionPayload
+
 proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
                                     randao_reveal: ValidatorSig,
                                     validator_index: ValidatorIndex,
@@ -313,27 +352,38 @@ proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
       doAssert v.addr == addr proposalStateAddr.data
       assign(proposalStateAddr[], poolPtr.headState)
 
-    return makeBeaconBlock(
-      node.runtimePreset,
-      hashedState,
-      validator_index,
-      head.root,
-      randao_reveal,
-      eth1Proposal.vote,
-      graffiti,
-      node.attestationPool[].getAttestationsForBlock(state, cache),
-      eth1Proposal.deposits,
-      node.exitPool[].getProposerSlashingsForBlock(),
-      node.exitPool[].getAttesterSlashingsForBlock(),
-      node.exitPool[].getVoluntaryExitsForBlock(),
-      default(ExecutionPayload),
-      restore,
-      cache)
+    try:
+      let executionPayload = await node.getExecutionPayload(state)
+
+      return makeBeaconBlock(
+        node.runtimePreset,
+        hashedState,
+        validator_index,
+        head.root,
+        randao_reveal,
+        eth1Proposal.vote,
+        graffiti,
+        node.attestationPool[].getAttestationsForBlock(state, cache),
+        eth1Proposal.deposits,
+        node.exitPool[].getProposerSlashingsForBlock(),
+        node.exitPool[].getAttesterSlashingsForBlock(),
+        node.exitPool[].getVoluntaryExitsForBlock(),
+        executionPayload,
+        restore,
+        cache)
+    except CancelledError as exc:
+      raise exc
+    except CatchableError as exc:
+      # TODO in theory, this could be from the makeBeaconBlock expression
+      error "consensus_assembleBlock failed",
+        exc = exc.msg
+      return none(BeaconBlock)
 
 proc proposeSignedBlock*(node: BeaconNode,
                          head: BlockRef,
                          validator: AttachedValidator,
-                         newBlock: SignedBeaconBlock): BlockRef =
+                         newBlock: SignedBeaconBlock):
+                         Future[BlockRef] {.async.} =
   let newBlockRef = node.chainDag.addRawBlock(node.quarantine, newBlock) do (
       blckRef: BlockRef, trustedBlock: TrustedSignedBeaconBlock,
       epochRef: EpochRef, state: HashedBeaconState):
@@ -348,6 +398,8 @@ proc proposeSignedBlock*(node: BeaconNode,
       blockRoot = shortLog(newBlock.root)
 
     return head
+
+  await node.chainDag.executionPayloadSync(node.web3Provider, newBlock.message)
 
   notice "Block proposed",
     blck = shortLog(newBlock.message),
@@ -413,7 +465,7 @@ proc proposeBlock(node: BeaconNode,
   newBlock.signature = await validator.signBlockProposal(
     fork, genesis_validators_root, slot, newBlock.root)
 
-  return node.proposeSignedBlock(head, validator, newBlock)
+  return await node.proposeSignedBlock(head, validator, newBlock)
 
 proc handleAttestations(node: BeaconNode, head: BlockRef, slot: Slot) =
   ## Perform all attestations that the validators attached to this node should
@@ -703,8 +755,19 @@ proc handleValidatorDuties*(node: BeaconNode, lastSlot, slot: Slot) {.async.} =
         await sleepAsync(afterBlockCutoff.offset)
 
     # Time passed - we might need to select a new head in that case
+    let oldHead = node.chainDag.head
     node.consensusManager[].updateHead(slot)
     head = node.chainDag.head
+    if oldHead != head:
+      debug "calling RPC node.eth1Monitor.setHead", head = head.root
+      try:
+        let setHeadRes = await node.web3Provider.setHead(head.root)
+        if not setHeadRes.success:
+          warn "The execution layer refused to update its head block",
+                head = head.root
+      except CatchableError as err:
+        warn "Failed to update the execution layer head block",
+              head = head.root, err = err.msg
 
   handleAttestations(node, head, slot)
 

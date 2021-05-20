@@ -13,7 +13,8 @@ import
   ../consensus_object_pools/[block_clearance, blockchain_dag, attestation_pool],
   ./consensus_manager,
   ".."/[beacon_clock, beacon_node_types],
-  ../ssz/sszdump
+  ../ssz/sszdump,
+  ../eth1/eth1_monitor
 
 # Gossip Queue Manager
 # ------------------------------------------------------------------------------
@@ -73,7 +74,7 @@ type
     # Consumer
     # ----------------------------------------------------------------
     consensusManager: ref ConsensusManager
-      ## Blockchain DAG, AttestationPool and Quarantine
+      ## Blockchain DAG, AttestationPool, Quarantine, and Eth1Manager
 
 {.push raises: [Defect].}
 
@@ -183,7 +184,7 @@ proc storeBlock(
 # Event Loop
 # ------------------------------------------------------------------------------
 
-proc processBlock(self: var VerifQueueManager, entry: BlockEntry) =
+proc processBlock(self: var VerifQueueManager, entry: BlockEntry): bool =
   logScope:
     blockRoot = shortLog(entry.v.blk.root)
 
@@ -227,14 +228,17 @@ proc processBlock(self: var VerifQueueManager, entry: BlockEntry) =
 
     if entry.v.resFut != nil:
       entry.v.resFut.complete(Result[void, BlockError].ok())
+    true
   elif res.error() in {BlockError.Duplicate, BlockError.Old}:
     # These are harmless / valid outcomes - for the purpose of scoring peers,
     # they are ok
     if entry.v.resFut != nil:
       entry.v.resFut.complete(Result[void, BlockError].ok())
+    false
   else:
     if entry.v.resFut != nil:
       entry.v.resFut.complete(Result[void, BlockError].err(res.error()))
+    false
 
 proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
   while true:
@@ -251,4 +255,7 @@ proc runQueueProcessingLoop*(self: ref VerifQueueManager) {.async.} =
 
     discard await idleAsync().withTimeout(idleTimeout)
 
-    self[].processBlock(await self[].blocksQueue.popFirst())
+    let blck = await self[].blocksQueue.popFirst()
+    if self[].processBlock(blck):
+      await self.consensusManager.chainDag.executionPayloadSync(
+        self.consensusManager.web3Provider, blck.v.blk.message)

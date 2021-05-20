@@ -55,9 +55,9 @@ proc installConfigApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
       "RANDOM_SUBNETS_PER_VALIDATOR": $RANDOM_SUBNETS_PER_VALIDATOR,
       "EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION":
         $EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION,
-      "SECONDS_PER_ETH1_BLOCK": $SECONDS_PER_ETH1_BLOCK,
-      "DEPOSIT_CHAIN_ID": $DEPOSIT_CHAIN_ID,
-      "DEPOSIT_NETWORK_ID": $DEPOSIT_NETWORK_ID,
+      "SECONDS_PER_ETH1_BLOCK": $node.runtimePreset.SECONDS_PER_ETH1_BLOCK,
+      "DEPOSIT_CHAIN_ID": $node.runtimePreset.DEPOSIT_CHAIN_ID,
+      "DEPOSIT_NETWORK_ID": $node.runtimePreset.DEPOSIT_NETWORK_ID,
       "DEPOSIT_CONTRACT_ADDRESS": node.getDepositAddress,
       "MIN_DEPOSIT_AMOUNT": $MIN_DEPOSIT_AMOUNT,
       "MAX_EFFECTIVE_BALANCE": $MAX_EFFECTIVE_BALANCE,
@@ -111,6 +111,6 @@ proc installConfigApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
 
   rpcServer.rpc("get_v1_config_deposit_contract") do () -> JsonNode:
     return %*{
-      "chain_id": $DEPOSIT_CHAIN_ID,
+      "chain_id": $node.runtimePreset.DEPOSIT_CHAIN_ID,
       "address": node.getDepositAddress
     }

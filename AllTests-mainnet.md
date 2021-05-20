@@ -5,10 +5,9 @@ AllTests-mainnet
 + BASE_REWARD_FACTOR                                64                   [Preset: mainnet]   OK
 + BLS_WITHDRAWAL_PREFIX                             "0x00"               [Preset: mainnet]   OK
 + CHURN_LIMIT_QUOTIENT                              65536                [Preset: mainnet]   OK
-  CONFIG_NAME                                       "mainnet"            [Preset: mainnet]   Skip
-  DEPOSIT_CHAIN_ID                                  1                    [Preset: mainnet]   Skip
++ DEPOSIT_CHAIN_ID                                  1                    [Preset: mainnet]   OK
   DEPOSIT_CONTRACT_ADDRESS                          "0x00000000219ab540356cBB839Cbe05303d770 Skip
-  DEPOSIT_NETWORK_ID                                1                    [Preset: mainnet]   Skip
++ DEPOSIT_NETWORK_ID                                1                    [Preset: mainnet]   OK
 + DOMAIN_AGGREGATE_AND_PROOF                        "0x06000000"         [Preset: mainnet]   OK
 + DOMAIN_BEACON_ATTESTER                            "0x01000000"         [Preset: mainnet]   OK
 + DOMAIN_BEACON_PROPOSER                            "0x00000000"         [Preset: mainnet]   OK
@@ -63,7 +62,7 @@ AllTests-mainnet
 + VALIDATOR_REGISTRY_LIMIT                          1099511627776        [Preset: mainnet]   OK
 + WHISTLEBLOWER_REWARD_QUOTIENT                     512                  [Preset: mainnet]   OK
 ```
-OK: 51/60 Fail: 0/60 Skip: 9/60
+OK: 53/59 Fail: 0/59 Skip: 6/59
 ## Attestation pool processing [Preset: mainnet]
 ```diff
 + Attestations may arrive in any order [Preset: mainnet]                                     OK
@@ -177,11 +176,10 @@ OK: 1/1 Fail: 0/1 Skip: 0/1
 OK: 3/3 Fail: 0/3 Skip: 0/3
 ## Interop
 ```diff
-+ Interop genesis                                                                            OK
 + Interop signatures                                                                         OK
 + Mocked start private key                                                                   OK
 ```
-OK: 3/3 Fail: 0/3 Skip: 0/3
+OK: 2/2 Fail: 0/2 Skip: 0/2
 ## PeerPool testing suite
 ```diff
 + Access peers by key test                                                                   OK
@@ -266,9 +264,10 @@ OK: 1/1 Fail: 0/1 Skip: 0/1
 + [SyncQueue] checkResponse() test                                                           OK
 + [SyncQueue] contains() test                                                                OK
 + [SyncQueue] getLastNonEmptySlot() test                                                     OK
++ [SyncQueue] getRewindPoint() test                                                          OK
 + [SyncQueue] hasEndGap() test                                                               OK
 ```
-OK: 13/13 Fail: 0/13 Skip: 0/13
+OK: 14/14 Fail: 0/14 Skip: 0/14
 ## Zero signature sanity checks
 ```diff
 + SSZ serialization roundtrip of SignedBeaconBlockHeader                                     OK
@@ -322,4 +321,4 @@ OK: 3/3 Fail: 0/3 Skip: 0/3
 OK: 1/1 Fail: 0/1 Skip: 0/1
 
 ---TOTAL---
-OK: 179/188 Fail: 0/188 Skip: 9/188
+OK: 181/187 Fail: 0/187 Skip: 6/187

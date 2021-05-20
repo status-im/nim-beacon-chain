@@ -169,8 +169,5 @@ const
   # Deposit contract
   # ---------------------------------------------------------------
   # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/configs/mainnet/phase0.yaml#L51
-
-  # Ethereum PoW Mainnet
-  # TODO(zah) These violate the spec (this is a temporary change to allow `make medalla` to work)
-  DEPOSIT_CHAIN_ID* = 5
-  DEPOSIT_NETWORK_ID* = 5
+  DEPOSIT_CHAIN_ID* = 1
+  DEPOSIT_NETWORK_ID* = 1

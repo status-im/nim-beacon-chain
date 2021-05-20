@@ -20,7 +20,7 @@ import
   ./fixtures_utils,
   ../helpers/debug_state
 
-const OpVoluntaryExitDir = SszTestsDir/const_preset/"phase0"/"operations"/"voluntary_exit"/"pyspec_tests"
+const OpVoluntaryExitDir = SszTestsDir/const_preset/"merge"/"operations"/"voluntary_exit"/"pyspec_tests"
 
 proc runTest(identifier: string) =
   # We wrap the tests in a proc to avoid running out of globals
@@ -33,7 +33,7 @@ proc runTest(identifier: string) =
   proc `testImpl _ voluntary_exit _ identifier`() =
 
     var prefix: string
-    if existsFile(testDir/"post.ssz"):
+    if existsFile(testDir/"post.ssz_snappy"):
       prefix = "[Valid]   "
     else:
       prefix = "[Invalid] "
@@ -44,7 +44,7 @@ proc runTest(identifier: string) =
 
       var cache = StateCache()
 
-      if existsFile(testDir/"post.ssz"):
+      if existsFile(testDir/"post.ssz_snappy"):
         let postState = newClone(parseTest(testDir/"post.ssz", SSZ, BeaconState))
         let done =
           process_voluntary_exit(preState[], voluntaryExit, {}, cache).isOk

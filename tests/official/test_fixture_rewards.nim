@@ -20,7 +20,7 @@ import
   ./fixtures_utils
 
 const
-  RewardsDirBase = SszTestsDir/const_preset/"phase0"/"rewards"
+  RewardsDirBase = SszTestsDir/const_preset/"merge"/"rewards"
   RewardsDirBasic = RewardsDirBase/"basic"/"pyspec_tests"
   RewardsDirLeak = RewardsDirBase/"leak"/"pyspec_tests"
   RewardsDirRandom = RewardsDirBase/"random"/"pyspec_tests"

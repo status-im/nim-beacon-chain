@@ -22,6 +22,10 @@ import
   ".."/[beacon_chain_db, beacon_node_status],
   ./merkle_minimal
 
+import ../rpc/eth_merge_web3
+import web3/ethhexstrings
+import stew/byteutils
+
 export
   web3Types
 
@@ -296,8 +300,8 @@ func voting_period_start_time*(state: BeaconState): uint64 =
 func is_candidate_block(preset: RuntimePreset,
                         blk: Eth1Block,
                         period_start: uint64): bool =
-  (blk.timestamp + SECONDS_PER_ETH1_BLOCK * preset.ETH1_FOLLOW_DISTANCE <= period_start) and
-  (blk.timestamp + SECONDS_PER_ETH1_BLOCK * preset.ETH1_FOLLOW_DISTANCE * 2 >= period_start)
+  (blk.timestamp + preset.SECONDS_PER_ETH1_BLOCK * preset.ETH1_FOLLOW_DISTANCE <= period_start) and
+  (blk.timestamp + preset.SECONDS_PER_ETH1_BLOCK * preset.ETH1_FOLLOW_DISTANCE * 2 >= period_start)
 
 func asEth2Digest*(x: BlockHash): Eth2Digest =
   Eth2Digest(data: array[32, byte](x))
@@ -434,6 +438,10 @@ proc newBlock*(p: Web3DataProviderRef,
     blockHash: executableData.block_hash.data.encodeQuantityHex,
     transactions: List[string, MAX_EXECUTION_TRANSACTIONS].init(
       mapIt(executableData.transactions, it.encodeOpaqueTransaction))))
+
+proc getEarliestBlock*(p: Web3DataProviderRef): Future[BlockObject] =
+  # mostly want the hash field
+  p.web3.provider.eth_getBlockByNumber(blockId("earliest"), true)
 
 template readJsonField(j: JsonNode, fieldName: string, ValueType: type): untyped =
   var res: ValueType
@@ -783,6 +791,11 @@ proc new(T: type Web3DataProvider,
 
   return ok Web3DataProviderRef(url: web3Url, web3: web3, ns: ns)
 
+# route around eth1 monitor initialization gating; intentionally a bit clunky
+proc newWeb3DataProvider*(depositContractAddress: Eth1Address, web3Url: string):
+    Future[Result[Web3DataProviderRef, string]]=
+  return Web3DataProvider.new(depositContractAddress, web3Url)
+
 proc putInitialDepositContractSnapshot*(db: BeaconChainDB,
                                         s: DepositContractSnapshot) =
   let existingStart = db.getEth2FinalizedTo()
@@ -1049,17 +1062,20 @@ proc startEth1Syncing(m: Eth1Monitor, delayBeforeStart: Duration) {.async.} =
   m.dataProvider = dataProviderRes.tryGet()
   let web3 = m.dataProvider.web3
 
-  if m.state == Initialized and m.eth1Network.isSome:
-    let
-      providerNetwork = awaitWithRetries web3.provider.net_version()
-      expectedNetwork = case m.eth1Network.get
-        of mainnet: "1"
-        of rinkeby: "4"
-        of goerli:  "5"
-    if expectedNetwork != providerNetwork:
-      fatal "The specified web3 provider serves data for a different network",
-             expectedNetwork, providerNetwork
-      quit 1
+  block checkNetworkCompatibility:
+    if m.state == Initialized and m.eth1Network.isSome:
+      let
+        providerNetwork = awaitWithRetries web3.provider.net_version()
+        expectedNetwork = case m.eth1Network.get
+          of mainnet: "1"
+          of rinkeby: "4"
+          of goerli:  "5"
+          of customEth1Network:
+            break checkNetworkCompatibility
+      if expectedNetwork != providerNetwork:
+        fatal "The specified web3 provider serves data for a different network",
+               expectedNetwork, providerNetwork
+        quit 1
 
   m.state = Started
 

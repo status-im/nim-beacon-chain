@@ -10,7 +10,10 @@
 import
   chronicles, chronos,
   ../spec/[crypto, datatypes],
-  ../consensus_object_pools/[blockchain_dag, attestation_pool]
+  ../consensus_object_pools/[blockchain_dag, attestation_pool],
+
+  # not ideal
+  ../eth1/eth1_monitor
 
 # TODO: Move to "consensus_object_pools" folder
 
@@ -28,18 +31,24 @@ type
     # ----------------------------------------------------------------
     quarantine*: QuarantineRef
 
+    # Eth1 integration for merge
+    # ----------------------------------------------------------------
+    web3Provider*: Web3DataProviderRef
+
 # Initialization
 # ------------------------------------------------------------------------------
 
 proc new*(T: type ConsensusManager,
           chainDag: ChainDAGRef,
           attestationPool: ref AttestationPool,
-          quarantine: QuarantineRef
+          quarantine: QuarantineRef,
+          web3Provider: Web3DataProviderRef
          ): ref ConsensusManager =
   (ref ConsensusManager)(
     chainDag: chainDag,
     attestationPool: attestationPool,
-    quarantine: quarantine
+    quarantine: quarantine,
+    web3Provider: web3Provider
   )
 
 # Consensus Management

@@ -11,6 +11,7 @@ import
   macros, sets,
   # Third-party
   yaml,
+  snappy,
   # Beacon chain internals
   ../../beacon_chain/spec/[crypto, datatypes, digest],
   ../../beacon_chain/ssz,
@@ -23,7 +24,8 @@ import
 # ----------------------------------------------------------------
 
 const
-  SSZDir = SszTestsDir/const_preset/"phase0"/"ssz_static"
+  SSZDir = SszTestsDir/const_preset/"merge"/"ssz_static"
+  MAX_OBJECT_SIZE = 10_000_000
 
 type
   SSZHashTreeRoot = object
@@ -45,7 +47,7 @@ type
 
 proc checkSSZ(T: type SignedBeaconBlock, dir: string, expectedHash: SSZHashTreeRoot) =
   # Deserialize into a ref object to not fill Nim stack
-  let encoded = readFileBytes(dir/"serialized.ssz")
+  let encoded = snappy.decode(readFileBytes(dir/"serialized.ssz_snappy"), MAX_OBJECT_SIZE)
   var deserialized = newClone(sszDecodeEntireInput(encoded, T))
 
   # SignedBeaconBlocks usually not hashed because they're identified by
@@ -62,7 +64,7 @@ proc checkSSZ(T: type SignedBeaconBlock, dir: string, expectedHash: SSZHashTreeR
 
 proc checkSSZ(T: type, dir: string, expectedHash: SSZHashTreeRoot) =
   # Deserialize into a ref object to not fill Nim stack
-  let encoded = readFileBytes(dir/"serialized.ssz")
+  let encoded = snappy.decode(readFileBytes(dir/"serialized.ssz_snappy"), MAX_OBJECT_SIZE)
   var deserialized = newClone(sszDecodeEntireInput(encoded, T))
 
   check: expectedHash.root == "0x" & toLowerASCII($hash_tree_root(deserialized[]))
@@ -103,17 +105,21 @@ suite "Official - SSZ consensus objects " & preset():
           of "BeaconBlockBody": checkSSZ(BeaconBlockBody, path, hash)
           of "BeaconBlockHeader": checkSSZ(BeaconBlockHeader, path, hash)
           of "BeaconState": checkSSZ(BeaconState, path, hash)
+
           of "Checkpoint": checkSSZ(Checkpoint, path, hash)
           of "Deposit": checkSSZ(Deposit, path, hash)
           of "DepositData": checkSSZ(DepositData, path, hash)
           of "DepositMessage": checkSSZ(DepositMessage, path, hash)
           of "Eth1Block": checkSSZ(Eth1Block, path, hash)
           of "Eth1Data": checkSSZ(Eth1Data, path, hash)
+          of "ExecutionPayload": checkSSZ(ExecutionPayload, path, hash)
+          of "ExecutionPayloadHeader": checkSSZ(ExecutionPayloadHeader, path, hash)
           of "Fork": checkSSZ(Fork, path, hash)
           of "ForkData": checkSSZ(ForkData, path, hash)
           of "HistoricalBatch": checkSSZ(HistoricalBatch, path, hash)
           of "IndexedAttestation": checkSSZ(IndexedAttestation, path, hash)
           of "PendingAttestation": checkSSZ(PendingAttestation, path, hash)
+          of "PowBlock": discard   # TODO not used so far in SSZ
           of "ProposerSlashing": checkSSZ(ProposerSlashing, path, hash)
           of "SignedAggregateAndProof":
             checkSSZ(SignedAggregateAndProof, path, hash)

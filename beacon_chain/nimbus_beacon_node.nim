@@ -304,6 +304,10 @@ proc init*(T: type BeaconNode,
   else:
     nil
 
+  if config.web3Urls.len == 0:
+    fatal "Please specify the address of your execution engine through the --web3-url parameter"
+    quit 1
+
   let
     netKeys = getPersistentNetKeys(rng[], config)
     nickname = if config.nodeName == "auto": shortForm(netKeys)
@@ -336,8 +340,11 @@ proc init*(T: type BeaconNode,
           config.validatorsDir(), SlashingDbName)
     validatorPool = newClone(ValidatorPool.init(slashingProtectionDB))
 
+    # TODO waitFor etc. This is temporary init code, so fine for now
+    web3Provider = waitFor newWeb3DataProvider(depositContractAddress, config.web3Urls[0])
+
     consensusManager = ConsensusManager.new(
-      chainDag, attestationPool, quarantine
+      chainDag, attestationPool, quarantine, web3Provider.get
     )
     verifQueues = VerifQueueManager.new(
       config.dumpEnabled, config.dumpDirInvalid, config.dumpDirIncoming,
@@ -374,7 +381,9 @@ proc init*(T: type BeaconNode,
     processor: processor,
     verifQueues: verifQueues,
     consensusManager: consensusManager,
-    requestManager: RequestManager.init(network, verifQueues)
+    requestManager: RequestManager.init(network, verifQueues),
+    #earlyBlockHash: (waitFor web3Provider.get.getEarliestBlock()).hash
+    web3Provider: web3Provider.get
   )
 
   # set topic validation routine

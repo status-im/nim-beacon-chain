@@ -104,7 +104,7 @@ func diffStates*(state0, state1: BeaconState): BeaconStateDiff =
 
   doAssert state0.genesis_time == state1.genesis_time
   doAssert state0.genesis_validators_root == state1.genesis_validators_root
-  doAssert state0.fork == state1.fork
+  doAssert state0.fork == state1.fork  # TODO fork might change
   doAssert state1.historical_roots.len - state0.historical_roots.len in [0, 1]
 
   let
