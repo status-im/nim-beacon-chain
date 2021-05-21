@@ -1,6 +1,6 @@
 import
   std/[typetraits],
-  stew/[results, base10, byteutils],
+  stew/[results, base10, byteutils, endians2],
   chronicles, presto,
   faststreams/[outputs],
   serialization, json_serialization,
@@ -103,13 +103,13 @@ type
     MAX_ATTESTATIONS: uint64
     MAX_DEPOSITS: uint64
     MAX_VOLUNTARY_EXITS: uint64
-    DOMAIN_BEACON_PROPOSER: array[4, byte]
-    DOMAIN_BEACON_ATTESTER: array[4, byte]
-    DOMAIN_RANDAO: array[4, byte]
-    DOMAIN_DEPOSIT: array[4, byte]
-    DOMAIN_VOLUNTARY_EXIT: array[4, byte]
-    DOMAIN_SELECTION_PROOF: array[4, byte]
-    DOMAIN_AGGREGATE_AND_PROOF: array[4, byte]
+    DOMAIN_BEACON_PROPOSER: DomainType
+    DOMAIN_BEACON_ATTESTER: DomainType
+    DOMAIN_RANDAO: DomainType
+    DOMAIN_DEPOSIT: DomainType
+    DOMAIN_VOLUNTARY_EXIT: DomainType
+    DOMAIN_SELECTION_PROOF: DomainType
+    DOMAIN_AGGREGATE_AND_PROOF: DomainType
 
   DataEnclosedObject*[T] = object
     data*: T
@@ -215,6 +215,40 @@ proc readValue*(reader: var JsonReader[RestJson], value: var uint64) {.
     value = res.get()
   else:
     reader.raiseUnexpectedValue($res.error())
+
+## byte
+proc writeValue*(w: var JsonWriter[RestJson], value: byte) =
+  var data: array[1, byte]
+  data[0] = value
+  writeValue(w, hexOriginal(data))
+
+proc readValue*(reader: var JsonReader[RestJson], value: var byte) {.
+     raises: [IOError, SerializationError, Defect].} =
+  var data: array[1, byte]
+  try:
+    hexToByteArray(reader.readValue(string), data)
+    value = data[0]
+  except ValueError:
+    raiseUnexpectedValue(reader,
+                         "byte value should be a valid hex string")
+
+## DomainType
+proc writeValue*(w: var JsonWriter[RestJson], value: DomainType) =
+  writeValue(w, hexOriginal(uint32(value).toBytesLE()))
+
+proc readValue*(reader: var JsonReader[RestJson], value: var DomainType) {.
+     raises: [IOError, SerializationError, Defect].} =
+  var data: array[4, byte]
+  try:
+    hexToByteArray(reader.readValue(string), data)
+    let res = uint32.fromBytesLE(data)
+    if res >= uint32(low(DomainType)) and res <= uint32(high(DomainType)):
+      value = cast[DomainType](res)
+    else:
+      raiseUnexpectedValue(reader, "Incorrect DomainType value")
+  except ValueError:
+    raiseUnexpectedValue(reader,
+                         "DomainType value should be a valid hex string")
 
 ## Slot
 proc writeValue*(writer: var JsonWriter[RestJson], value: Slot) {.
