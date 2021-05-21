@@ -297,7 +297,7 @@ proc getSyncingStatus*(): RestResponse[DataRestSyncInfo] {.
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Node/getSyncingStatus
 
-proc getVersion*(): RestResponse[DataRestVersionTuple] {.
+proc getVersion*(): RestResponse[DataRestVersion] {.
      rest, endpoint: "/api/eth/v1/node/version",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Node/getNodeVersion

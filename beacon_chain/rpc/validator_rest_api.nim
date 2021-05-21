@@ -19,28 +19,6 @@ import
 
 logScope: topics = "rest_validatorapi"
 
-type
-  RestAttesterDuty* = object
-    pubkey*: ValidatorPubKey
-    validator_index*: ValidatorIndex
-    committee_index*: CommitteeIndex
-    committee_length*: uint64
-    committees_at_slot*: uint64
-    validator_committee_index*: ValidatorIndex
-    slot*: Slot
-
-  RestProposerDuty* = object
-    pubkey*: ValidatorPubKey
-    validator_index*: ValidatorIndex
-    slot*: Slot
-
-  RestCommitteeSubscription* = object
-    validator_index*: ValidatorIndex
-    committee_index*: CommitteeIndex
-    committees_at_slot*: uint64
-    slot*: Slot
-    is_aggregator*: bool
-
 proc installValidatorApiHandlers*(router: var RestRouter, node: BeaconNode) =
   # https://ethereum.github.io/eth2.0-APIs/#/Validator/getAttesterDuties
   router.api(MethodPost, "/api/eth/v1/validator/duties/attester/{epoch}") do (
@@ -448,7 +426,7 @@ proc publishAggregateAndProofs*(body: seq[SignedAggregateAndProof]
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/publishAggregateAndProofs
 
-proc prepareBeaconCommitteeSubnet*(body: seq[RestCommitteeSubscriptionTuple]
+proc prepareBeaconCommitteeSubnet*(body: seq[RestCommitteeSubscription]
                                   ): RestPlainResponse {.
      rest, endpoint: "/api/eth/v1/validator/beacon_committee_subscriptions",
      meth: MethodPost.}

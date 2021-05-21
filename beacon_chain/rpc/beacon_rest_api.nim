@@ -969,7 +969,7 @@ proc publishBlock*(body: SignedBeaconBlock): RestStatus {.
 
 proc getStateValidator*(state_id: StateIdent,
                         validator_id: ValidatorIdent
-                       ): RestResponse[DataRestValidatorTuple] {.
+                       ): RestResponse[DataRestValidator] {.
      rest,
      endpoint: "/api/eth/v1/beacon/states/{state_id}/validators/{validator_id}",
      meth: MethodGet.}
@@ -977,7 +977,7 @@ proc getStateValidator*(state_id: StateIdent,
 
 proc getStateValidators*(state_id: StateIdent,
                          id: seq[ValidatorIdent]
-                        ): RestResponse[DataRestValidatorTupleList] {.
+                        ): RestResponse[DataRestValidatorList] {.
      rest,
      endpoint: "/api/eth/v1/beacon/states/{state_id}/validators",
      meth: MethodGet.}

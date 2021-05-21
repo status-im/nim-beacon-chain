@@ -15,127 +15,130 @@ export json_serialization
 Json.createFlavor RestJson
 
 type
-  RestAttesterDutyTuple* = tuple
-    pubkey: ValidatorPubKey
-    validator_index: ValidatorIndex
-    committee_index: CommitteeIndex
-    committee_length: uint64
-    committees_at_slot: uint64
-    validator_committee_index: ValidatorIndex
-    slot: Slot
+  RestAttesterDuty* = object
+    pubkey*: ValidatorPubKey
+    validator_index*: ValidatorIndex
+    committee_index*: CommitteeIndex
+    committee_length*: uint64
+    committees_at_slot*: uint64
+    validator_committee_index*: ValidatorIndex
+    slot*: Slot
 
-  RestProposerDutyTuple* = tuple
-    pubkey: ValidatorPubKey
-    validator_index: ValidatorIndex
-    slot: Slot
+  RestProposerDuty* = object
+    pubkey*: ValidatorPubKey
+    validator_index*: ValidatorIndex
+    slot*: Slot
 
-  RestCommitteeSubscriptionTuple* = tuple
-    validator_index: ValidatorIndex
-    committee_index: CommitteeIndex
-    committees_at_slot: uint64
-    slot: Slot
-    is_aggregator: bool
+  RestCommitteeSubscription* = object
+    validator_index*: ValidatorIndex
+    committee_index*: CommitteeIndex
+    committees_at_slot*: uint64
+    slot*: Slot
+    is_aggregator*: bool
 
-  RestBeaconGenesisTuple* = tuple
-    genesis_time: uint64
-    genesis_validators_root: Eth2Digest
-    genesis_fork_version: Version
+  RestCommitteeSubscriptionList* = seq[RestCommitteeSubscription]
 
-  RestValidatorTuple* = tuple
-    index: ValidatorIndex
-    balance: string
-    status: string
-    validator: Validator
+  RestBeaconGenesis* = object
+    genesis_time*: uint64
+    genesis_validators_root*: Eth2Digest
+    genesis_fork_version*: Version
 
-  RestVersionTuple* = tuple
-    version: string
+  RestValidator* = object
+    index*: ValidatorIndex
+    balance*: string
+    status*: string
+    validator*: Validator
 
-  RestConfigTuple* = tuple
-    MAX_COMMITTEES_PER_SLOT: uint64
-    TARGET_COMMITTEE_SIZE: uint64
-    MAX_VALIDATORS_PER_COMMITTEE: uint64
-    MIN_PER_EPOCH_CHURN_LIMIT: uint64
-    CHURN_LIMIT_QUOTIENT: uint64
-    SHUFFLE_ROUND_COUNT: uint64
-    MIN_GENESIS_ACTIVE_VALIDATOR_COUNT: uint64
-    MIN_GENESIS_TIME: uint64
-    HYSTERESIS_QUOTIENT: uint64
-    HYSTERESIS_DOWNWARD_MULTIPLIER: uint64
-    HYSTERESIS_UPWARD_MULTIPLIER: uint64
-    SAFE_SLOTS_TO_UPDATE_JUSTIFIED: uint64
-    ETH1_FOLLOW_DISTANCE: uint64
-    TARGET_AGGREGATORS_PER_COMMITTEE: uint64
-    RANDOM_SUBNETS_PER_VALIDATOR: uint64
-    EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION: uint64
-    SECONDS_PER_ETH1_BLOCK: uint64
-    DEPOSIT_CHAIN_ID: uint64
-    DEPOSIT_NETWORK_ID: uint64
-    DEPOSIT_CONTRACT_ADDRESS: Eth1Address
-    MIN_DEPOSIT_AMOUNT: uint64
-    MAX_EFFECTIVE_BALANCE: uint64
-    EJECTION_BALANCE: uint64
-    EFFECTIVE_BALANCE_INCREMENT: uint64
-    GENESIS_FORK_VERSION: Version
-    BLS_WITHDRAWAL_PREFIX: byte
-    GENESIS_DELAY: uint64
-    SECONDS_PER_SLOT: uint64
-    MIN_ATTESTATION_INCLUSION_DELAY: uint64
-    SLOTS_PER_EPOCH: uint64
-    MIN_SEED_LOOKAHEAD: uint64
-    MAX_SEED_LOOKAHEAD: uint64
-    EPOCHS_PER_ETH1_VOTING_PERIOD: uint64
-    SLOTS_PER_HISTORICAL_ROOT: uint64
-    MIN_VALIDATOR_WITHDRAWABILITY_DELAY: uint64
-    SHARD_COMMITTEE_PERIOD: uint64
-    MIN_EPOCHS_TO_INACTIVITY_PENALTY: uint64
-    EPOCHS_PER_HISTORICAL_VECTOR: uint64
-    EPOCHS_PER_SLASHINGS_VECTOR: uint64
-    HISTORICAL_ROOTS_LIMIT: uint64
-    VALIDATOR_REGISTRY_LIMIT: uint64
-    BASE_REWARD_FACTOR: uint64
-    WHISTLEBLOWER_REWARD_QUOTIENT: uint64
-    PROPOSER_REWARD_QUOTIENT: uint64
-    INACTIVITY_PENALTY_QUOTIENT: uint64
-    MIN_SLASHING_PENALTY_QUOTIENT: uint64
-    PROPORTIONAL_SLASHING_MULTIPLIER: uint64
-    MAX_PROPOSER_SLASHINGS: uint64
-    MAX_ATTESTER_SLASHINGS: uint64
-    MAX_ATTESTATIONS: uint64
-    MAX_DEPOSITS: uint64
-    MAX_VOLUNTARY_EXITS: uint64
-    DOMAIN_BEACON_PROPOSER: DomainType
-    DOMAIN_BEACON_ATTESTER: DomainType
-    DOMAIN_RANDAO: DomainType
-    DOMAIN_DEPOSIT: DomainType
-    DOMAIN_VOLUNTARY_EXIT: DomainType
-    DOMAIN_SELECTION_PROOF: DomainType
-    DOMAIN_AGGREGATE_AND_PROOF: DomainType
+  RestVersion* = object
+    version*: string
+
+  RestConfig* = object
+    MAX_COMMITTEES_PER_SLOT*: uint64
+    TARGET_COMMITTEE_SIZE*: uint64
+    MAX_VALIDATORS_PER_COMMITTEE*: uint64
+    MIN_PER_EPOCH_CHURN_LIMIT*: uint64
+    CHURN_LIMIT_QUOTIENT*: uint64
+    SHUFFLE_ROUND_COUNT*: uint64
+    MIN_GENESIS_ACTIVE_VALIDATOR_COUNT*: uint64
+    MIN_GENESIS_TIME*: uint64
+    HYSTERESIS_QUOTIENT*: uint64
+    HYSTERESIS_DOWNWARD_MULTIPLIER*: uint64
+    HYSTERESIS_UPWARD_MULTIPLIER*: uint64
+    SAFE_SLOTS_TO_UPDATE_JUSTIFIED*: uint64
+    ETH1_FOLLOW_DISTANCE*: uint64
+    TARGET_AGGREGATORS_PER_COMMITTEE*: uint64
+    RANDOM_SUBNETS_PER_VALIDATOR*: uint64
+    EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION*: uint64
+    SECONDS_PER_ETH1_BLOCK*: uint64
+    DEPOSIT_CHAIN_ID*: uint64
+    DEPOSIT_NETWORK_ID*: uint64
+    DEPOSIT_CONTRACT_ADDRESS*: Eth1Address
+    MIN_DEPOSIT_AMOUNT*: uint64
+    MAX_EFFECTIVE_BALANCE*: uint64
+    EJECTION_BALANCE*: uint64
+    EFFECTIVE_BALANCE_INCREMENT*: uint64
+    GENESIS_FORK_VERSION*: Version
+    BLS_WITHDRAWAL_PREFIX*: byte
+    GENESIS_DELAY*: uint64
+    SECONDS_PER_SLOT*: uint64
+    MIN_ATTESTATION_INCLUSION_DELAY*: uint64
+    SLOTS_PER_EPOCH*: uint64
+    MIN_SEED_LOOKAHEAD*: uint64
+    MAX_SEED_LOOKAHEAD*: uint64
+    EPOCHS_PER_ETH1_VOTING_PERIOD*: uint64
+    SLOTS_PER_HISTORICAL_ROOT*: uint64
+    MIN_VALIDATOR_WITHDRAWABILITY_DELAY*: uint64
+    SHARD_COMMITTEE_PERIOD*: uint64
+    MIN_EPOCHS_TO_INACTIVITY_PENALTY*: uint64
+    EPOCHS_PER_HISTORICAL_VECTOR*: uint64
+    EPOCHS_PER_SLASHINGS_VECTOR*: uint64
+    HISTORICAL_ROOTS_LIMIT*: uint64
+    VALIDATOR_REGISTRY_LIMIT*: uint64
+    BASE_REWARD_FACTOR*: uint64
+    WHISTLEBLOWER_REWARD_QUOTIENT*: uint64
+    PROPOSER_REWARD_QUOTIENT*: uint64
+    INACTIVITY_PENALTY_QUOTIENT*: uint64
+    MIN_SLASHING_PENALTY_QUOTIENT*: uint64
+    PROPORTIONAL_SLASHING_MULTIPLIER*: uint64
+    MAX_PROPOSER_SLASHINGS*: uint64
+    MAX_ATTESTER_SLASHINGS*: uint64
+    MAX_ATTESTATIONS*: uint64
+    MAX_DEPOSITS*: uint64
+    MAX_VOLUNTARY_EXITS*: uint64
+    DOMAIN_BEACON_PROPOSER*: DomainType
+    DOMAIN_BEACON_ATTESTER*: DomainType
+    DOMAIN_RANDAO*: DomainType
+    DOMAIN_DEPOSIT*: DomainType
+    DOMAIN_VOLUNTARY_EXIT*: DomainType
+    DOMAIN_SELECTION_PROOF*: DomainType
+    DOMAIN_AGGREGATE_AND_PROOF*: DomainType
 
   DataEnclosedObject*[T] = object
     data*: T
 
-  DataRestBeaconGenesis* = DataEnclosedObject[RestBeaconGenesisTuple]
+  DataRestBeaconGenesis* = DataEnclosedObject[RestBeaconGenesis]
   DataRestFork* = DataEnclosedObject[Fork]
-  DataRestProposerDuties* = DataEnclosedObject[seq[RestProposerDutyTuple]]
-  DataRestAttesterDuties* = DataEnclosedObject[seq[RestAttesterDutyTuple]]
+  DataRestProposerDuties* = DataEnclosedObject[seq[RestProposerDuty]]
+  DataRestAttesterDuties* = DataEnclosedObject[seq[RestAttesterDuty]]
   DataRestBeaconBlock* = DataEnclosedObject[BeaconBlock]
   DataRestAttestationData* = DataEnclosedObject[AttestationData]
   DataRestAttestation* = DataEnclosedObject[Attestation]
   DataRestSyncInfo* = DataEnclosedObject[SyncInfo]
-  DataRestValidatorTuple* = DataEnclosedObject[RestValidatorTuple]
-  DataRestValidatorTupleList* = DataEnclosedObject[seq[RestValidatorTuple]]
-  DataRestVersionTuple* = DataEnclosedObject[RestVersionTuple]
-  DataRestConfigTuple* = DataEnclosedObject[RestConfigTuple]
+  DataRestValidator* = DataEnclosedObject[RestValidator]
+  DataRestValidatorList* = DataEnclosedObject[seq[RestValidator]]
+  DataRestVersion* = DataEnclosedObject[RestVersion]
+  DataRestConfig* = DataEnclosedObject[RestConfig]
 
   EncodeTypes* = SignedBeaconBlock | seq[ValidatorIndex] |
                  seq[AttestationData] | seq[SignedAggregateAndProof] |
-                 seq[RestCommitteeSubscriptionTuple]
+                 RestCommitteeSubscriptionList
+
   DecodeTypes* = DataRestBeaconGenesis | DataRestFork | DataRestProposerDuties |
                  DataRestAttesterDuties | DataRestBeaconBlock |
                  DataRestAttestationData | DataRestAttestation |
-                 DataRestSyncInfo | DataRestValidatorTuple |
-                 DataRestValidatorTupleList | DataRestVersionTuple |
-                 DataRestConfigTuple
+                 DataRestSyncInfo | DataRestValidator |
+                 DataRestValidatorList | DataRestVersion |
+                 DataRestConfig
 
 proc jsonResponseWRoot*(t: typedesc[RestApiResponse],
                         data: auto,
