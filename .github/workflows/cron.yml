@@ -2,6 +2,8 @@ name: Daily
 on:
   schedule:
     - cron: "10 20 * * *"
+  workflow_dispatch:
+  #pull_request:
 
 jobs:
   build:
@@ -44,40 +46,14 @@ jobs:
     continue-on-error: ${{ matrix.branch == 'devel' }}
     steps:
       - name: Checkout nimbus-eth2
+        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/checkout@v2
         with:
           ref: unstable
 
-      - name: Derive environment variables
-        shell: bash
-        run: |
-          if [[ '${{ matrix.target.cpu }}' == 'amd64' ]]; then
-            PLATFORM=x64
-          else
-            PLATFORM=x86
-          fi
-          echo "PLATFORM=${PLATFORM}" >> $GITHUB_ENV
-
-          # libminiupnp / natpmp
-          if [[ '${{ runner.os }}' == 'Linux' && '${{ matrix.target.cpu }}' == 'i386' ]]; then
-            export CFLAGS="${CFLAGS} -m32 -mno-adx"
-            echo "CFLAGS=${CFLAGS}" >> $GITHUB_ENV
-          fi
-
-          ncpu=""
-          case '${{ runner.os }}' in
-          'Linux')
-            ncpu=$(nproc)
-            ;;
-          'macOS')
-            ncpu=$(sysctl -n hw.ncpu)
-            ;;
-          'Windows')
-            ncpu=${NUMBER_OF_PROCESSORS}
-            ;;
-          esac
-          [[ -z "$ncpu" || $ncpu -le 0 ]] && ncpu=1
-          echo "ncpu=${ncpu}" >> $GITHUB_ENV
+      - name: Checkout nimbus-eth2 (pull request)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@v2
 
       - name: Install build dependencies (Linux i386)
         if: runner.os == 'Linux' && matrix.target.cpu == 'i386'
@@ -131,7 +107,6 @@ jobs:
         if: >
           steps.windows-dlls-cache.outputs.cache-hit != 'true' &&
           runner.os == 'Windows'
-        shell: bash
         run: |
           mkdir -p external
           curl -L "https://nim-lang.org/download/windeps.zip" -o external/windeps.zip
@@ -140,25 +115,53 @@ jobs:
       - name: Path to cached dependencies (Windows)
         if: >
           runner.os == 'Windows'
-        shell: bash
         run: |
           echo "${{ github.workspace }}/external/dlls-${{ matrix.target.cpu }}" >> $GITHUB_PATH
+          # for miniupnp that runs "wingenminiupnpcstrings.exe" from the current dir
+          echo "." >> $GITHUB_PATH
 
       - name: Install build dependencies (macOS)
         if: runner.os == 'macOS'
-        shell: bash
         run: |
           brew install gnu-getopt
           brew link --force gnu-getopt
 
+      - name: Derive environment variables
+        run: |
+          if [[ '${{ matrix.target.cpu }}' == 'amd64' ]]; then
+            PLATFORM=x64
+          else
+            PLATFORM=x86
+          fi
+          echo "PLATFORM=${PLATFORM}" >> $GITHUB_ENV
+
+          # libminiupnp / natpmp
+          if [[ '${{ runner.os }}' == 'Linux' && '${{ matrix.target.cpu }}' == 'i386' ]]; then
+            export CFLAGS="${CFLAGS} -m32 -mno-adx"
+            echo "CFLAGS=${CFLAGS}" >> $GITHUB_ENV
+          fi
+
+          ncpu=""
+          case '${{ runner.os }}' in
+          'Linux')
+            ncpu=$(nproc)
+            ;;
+          'macOS')
+            ncpu=$(sysctl -n hw.ncpu)
+            ;;
+          'Windows')
+            ncpu=${NUMBER_OF_PROCESSORS}
+            ;;
+          esac
+          [[ -z "$ncpu" || $ncpu -le 0 ]] && ncpu=1
+          echo "ncpu=${ncpu}" >> $GITHUB_ENV
+
       - name: Build Nim and Nimbus dependencies
-        shell: bash
         run: |
           make -j ${ncpu} NIM_COMMIT=${{ matrix.branch }} ARCH_OVERRIDE=${PLATFORM} QUICK_AND_DIRTY_COMPILER=1 update
 
       - name: Get latest fixtures commit hash
         id: fixtures_version
-        shell: bash
         run: |
           getHash() {
             git ls-remote "https://github.com/$1" "${2:-HEAD}" | cut -f 1
@@ -174,17 +177,16 @@ jobs:
           key: 'eth2-scenarios-${{ steps.fixtures_version.outputs.fixtures }}'
 
       - name: Get the Ethereum Foundation fixtures
-        shell: bash
         run: |
           scripts/setup_official_tests.sh fixturesCache
 
-      - name: Smoke test the Beacon Node and Validator Client with all tracing enabled
-        shell: bash
+      - name: Build all tools
         run: |
-          make -j ${ncpu} NIM_COMMIT=${{ matrix.branch }} LOG_LEVEL=TRACE NIMFLAGS="-d:testnet_servers_image" nimbus_beacon_node nimbus_validator_client
+          make -j ${ncpu} V=1 NIM_COMMIT=${{ matrix.branch }}
+          # The Windows image runs out of disk space, so make some room
+          rm -rf nimcache
 
       - name: Run nimbus-eth2 tests
-        shell: bash
         run: |
-          make -j ${ncpu} NIM_COMMIT=${{ matrix.branch }} DISABLE_TEST_FIXTURES_SCRIPT=1 test
+          make -j ${ncpu} V=1 NIM_COMMIT=${{ matrix.branch }} DISABLE_TEST_FIXTURES_SCRIPT=1 test
 

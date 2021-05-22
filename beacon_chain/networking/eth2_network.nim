@@ -1272,7 +1272,7 @@ proc p2pProtocolBackendImpl*(p: P2PProtocol): Backend =
   result.SerializationFormat = Format
   result.RequestResultsWrapper = ident "NetRes"
 
-  result.implementMsg = proc (msg: p2p_protocol_dsl.Message) =
+  result.implementMsg = proc (msg: p2p_protocol_dsl.Message) {.raises: [Exception].} =
     if msg.kind == msgResponse:
       return
 
