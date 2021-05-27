@@ -59,6 +59,9 @@ template fromSszBytes*(T: type Slot, bytes: openArray[byte]): T =
 template fromSszBytes*(T: type Epoch, bytes: openArray[byte]): T =
   T fromSszBytes(uint64, bytes)
 
+template fromSszBytes*(T: type ValidatorIndex, bytes: openArray[byte]): T =
+  T fromSszBytes(uint64, bytes)
+
 func fromSszBytes*(T: type ForkDigest, bytes: openArray[byte]): T {.raisesssz.} =
   if bytes.len != sizeof(result):
     raiseIncorrectSize T

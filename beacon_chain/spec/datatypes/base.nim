@@ -262,7 +262,7 @@ type
     epoch*: Epoch ##\
     ## Earliest epoch when voluntary exit can be processed
 
-    validator_index*: uint64
+    validator_index*: ValidatorIndex
 
   # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#beaconblock
   BeaconBlock* = object
@@ -896,6 +896,24 @@ func `[]`*[T](a: var seq[T], b: ValidatorIndex): var T =
 
 func `[]`*[T](a: seq[T], b: ValidatorIndex): auto =
   a[b.int]
+
+template `as`*(val: uint64, T: type ValidatorIndex): ValidatorIndex =
+  ValidatorIndex(val)
+
+template `<`*(x: ValidatorIndex, y: uint64): bool =
+  uint64(x) < y
+
+template `<=`*(x: ValidatorIndex, y: uint64): bool =
+  uint64(x) <= y
+
+template `==`*(x: ValidatorIndex, y: uint64): bool =
+  uint64(x) == y
+
+template `>=`*(x: ValidatorIndex, y: uint64): bool =
+  uint64(x) >= y
+
+template `>`*(x: ValidatorIndex, y: uint64): bool =
+  uint64(x) > y
 
 # `ValidatorIndex` Nim integration
 proc `==`*(x, y: ValidatorIndex) : bool {.borrow, noSideEffect.}

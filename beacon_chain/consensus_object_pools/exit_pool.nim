@@ -67,7 +67,7 @@ iterator getValidatorIndices(proposer_slashing: ProposerSlashing): uint64 =
   yield proposer_slashing.signed_header_1.message.proposer_index
 
 iterator getValidatorIndices(voluntary_exit: SignedVoluntaryExit): uint64 =
-  yield voluntary_exit.message.validator_index
+  yield voluntary_exit.message.validator_index.uint64
 
 # TODO stew/sequtils2
 template allIt(s, pred: untyped): bool =

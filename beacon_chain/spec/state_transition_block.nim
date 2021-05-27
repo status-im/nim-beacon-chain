@@ -247,10 +247,10 @@ proc check_voluntary_exit*(
   let voluntary_exit = signed_voluntary_exit.message
 
   # Not in spec. Check that validator_index is in range
-  if voluntary_exit.validator_index >= state.validators.lenu64:
+  if voluntary_exit.validator_index.uint64 >= state.validators.lenu64:
     return err("Exit: invalid validator index")
 
-  let validator = unsafeAddr state.validators.asSeq()[voluntary_exit.validator_index]
+  let validator = unsafeAddr state.validators.asSeq()[voluntary_exit.validator_index.uint64]
 
   # Verify the validator is active
   if not is_active_validator(validator[], get_current_epoch(state)):

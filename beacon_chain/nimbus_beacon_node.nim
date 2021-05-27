@@ -1499,12 +1499,13 @@ proc handleValidatorExitCommand(config: BeaconNodeConf) {.async.} =
     fatal "Failed to connect to the beacon node RPC service", err = err.msg
     quit 1
 
-  let (validator, validatorIdx, _, _) = try:
+  let (validator, validatorIdxUint64, _, _) = try:
     await rpcClient.get_v1_beacon_states_stateId_validators_validatorId(
       "head", config.exitedValidator)
   except CatchableError as err:
     fatal "Failed to obtain information for validator", err = err.msg
     quit 1
+  let validatorIdx = validatorIdxUint64 as ValidatorIndex
 
   let exitAtEpoch = if config.exitAtEpoch.isSome:
     Epoch config.exitAtEpoch.get
