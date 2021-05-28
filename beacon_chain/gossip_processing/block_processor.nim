@@ -185,7 +185,7 @@ proc processBlock(self: var BlockProcessor, entry: BlockEntry) =
   let
     startTick = Moment.now()
     res = self.storeBlock(entry.blck, wallSlot)
-    storeTick = Moment.now()
+    storeBlockTick = Moment.now()
 
   if res.isOk():
     # Eagerly update head in case the new block gets selected
@@ -194,8 +194,8 @@ proc processBlock(self: var BlockProcessor, entry: BlockEntry) =
     let
       updateHeadTick = Moment.now()
       queueDur = startTick - entry.queueTick
-      storeBlockDur = storeTick - startTick
-      updateHeadDur = updateHeadTick - storeTick
+      storeBlockDur = storeBlockTick - startTick
+      updateHeadDur = updateHeadTick - storeBlockTick
 
     beacon_store_block_duration_seconds.observe(storeBlockDur.toFloatSeconds())
 

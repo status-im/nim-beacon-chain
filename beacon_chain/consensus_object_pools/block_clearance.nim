@@ -78,7 +78,8 @@ proc addResolvedBlock(
        dag: var ChainDAGRef, quarantine: var QuarantineRef,
        state: var StateData, trustedBlock: TrustedSignedBeaconBlock,
        parent: BlockRef, cache: var StateCache,
-       onBlockAdded: OnBlockAdded
+       onBlockAdded: OnBlockAdded, stateDataDur, sigVerifyDur,
+       stateVerifyDur: Duration
      ) =
   # TODO move quarantine processing out of here
   doAssert getStateField(state, slot) == trustedBlock.message.slot,
@@ -108,7 +109,7 @@ proc addResolvedBlock(
 
   # Resolved blocks should be stored in database
   dag.putBlock(trustedBlock)
-  let putTick = Moment.now()
+  let putBlockTick = Moment.now()
 
   var foundHead: BlockRef
   for head in dag.heads.mitems():
@@ -127,8 +128,9 @@ proc addResolvedBlock(
     blck = shortLog(trustedBlock.message),
     blockRoot = shortLog(blockRoot),
     heads = dag.heads.len(),
+    stateDataDur, sigVerifyDur, stateVerifyDur,
     epochRefDur = epochRefTick - startTick,
-    putBlockDur = putTick - epochRefTick
+    putBlockDur = putBlockTick - epochRefTick
 
   state.blck = blockRef
 
@@ -221,13 +223,14 @@ proc addRawBlockKnownParent(
 
   # The block is resolved, now it's time to validate it to ensure that the
   # blocks we add to the database are clean for the given state
-
+  let startTick = Moment.now()
 
   # TODO if the block is from the future, we should not be resolving it (yet),
   #      but maybe we should use it as a hint that our clock is wrong?
   var cache = StateCache()
   updateStateData(
     dag, dag.clearanceState, parent.atSlot(signedBlock.message.slot), true, cache)
+  let stateDataTick = Moment.now()
 
   # First batch verify crypto
   if skipBLSValidation notin dag.updateFlags:
@@ -240,19 +243,23 @@ proc addRawBlockKnownParent(
     if not quarantine.batchVerify(sigs):
       return err((ValidationResult.Reject, Invalid))
 
+  let sigVerifyTick = Moment.now()
   static: doAssert sizeof(SignedBeaconBlock) == sizeof(SigVerifiedSignedBeaconBlock)
   let (valRes, blockErr) = addRawBlockCheckStateTransition(
     dag, quarantine, signedBlock.asSigVerified(), cache)
   if valRes != ValidationResult.Accept:
     return err((valRes, blockErr))
-
+  let stateVerifyTick = Moment.now()
   # Careful, clearanceState.data has been updated but not blck - we need to
   # create the BlockRef first!
   addResolvedBlock(
     dag, quarantine, dag.clearanceState,
     signedBlock.asTrusted(),
     parent, cache,
-    onBlockAdded)
+    onBlockAdded,
+    stateDataDur = stateDataTick - startTick,
+    sigVerifyDur = sigVerifyTick - stateDataTick,
+    stateVerifyDur = stateVerifyTick - sigVerifyTick)
 
   return ok dag.clearanceState.blck
 

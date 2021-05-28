@@ -919,12 +919,10 @@ proc pruneBlocksDAG(dag: ChainDAGRef) =
 
     dag.heads.del(n)
 
-  let dagPruningDur = Moment.now() - startTick
-
   debug "Pruned the blockchain DAG",
     currentCandidateHeads = dag.heads.len,
     prunedHeads = hlen - dag.heads.len,
-    dagPruningDur
+    dagPruneDur = Moment.now() - startTick
 
 func needStateCachesAndForkChoicePruning*(dag: ChainDAGRef): bool =
   dag.lastPrunePoint != dag.finalizedHead
@@ -937,7 +935,7 @@ proc pruneStateCachesDAG*(dag: ChainDAGRef) =
   ## This updates the `dag.lastPrunePoint` variable
   doAssert dag.needStateCachesAndForkChoicePruning()
 
-  let startState = Moment.now()
+  let startTick = Moment.now()
   block: # Remove states, walking slot by slot
     # We remove all state checkpoints that come _before_ the current finalized
     # head, as we might frequently be asked to replay states from the
@@ -955,10 +953,8 @@ proc pruneStateCachesDAG*(dag: ChainDAGRef) =
       if cur.slot.epoch mod 32 != 0 and cur.slot != dag.tail.slot:
         dag.delState(cur)
       cur = cur.parentOrSlot
-  let stopState = Moment.now()
-  let durState = stopState - startState
+  let statePruneTick = Moment.now()
 
-  let startEpochRef = Moment.now()
   block: # Clean up old EpochRef instances
     # After finalization, we can clear up the epoch cache and save memory -
     # it will be recomputed if needed
@@ -966,14 +962,13 @@ proc pruneStateCachesDAG*(dag: ChainDAGRef) =
       if dag.epochRefs[i][1] != nil and
           dag.epochRefs[i][1].epoch < dag.finalizedHead.slot.epoch:
         dag.epochRefs[i] = (nil, nil)
-  let stopEpochRef = Moment.now()
-  let durEpochRef = stopEpochRef - startEpochRef
+  let epochRefPruneTick = Moment.now()
 
   dag.lastPrunePoint = dag.finalizedHead
 
   debug "Pruned the state checkpoints and DAG caches.",
-    statePruningDur = durState,
-    epochRefPruningDur = durEpochRef
+    statePruneDur = statePruneTick - startTick,
+    epochRefPruneDur = epochRefPruneTick - statePruneTick
 
 proc updateHead*(
       dag: ChainDAGRef,
