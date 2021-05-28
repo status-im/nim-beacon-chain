@@ -541,10 +541,6 @@ type
       desc: "A directory containing validator keystore passwords"
       name: "secrets-dir" }: Option[InputDir]
 
-    eth2Network* {.
-      desc: "The Eth2 network to join [=mainnet]"
-      name: "network" }: Option[string]
-
     case cmd* {.
       command
       defaultValue: VCNoCommand }: VCStartUpCmd

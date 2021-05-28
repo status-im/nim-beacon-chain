@@ -36,8 +36,6 @@ type
     slot*: Slot
     is_aggregator*: bool
 
-  RestCommitteeSubscriptionList* = seq[RestCommitteeSubscription]
-
   RestBeaconGenesis* = object
     genesis_time*: uint64
     genesis_validators_root*: Eth2Digest
@@ -51,6 +49,11 @@ type
 
   RestVersion* = object
     version*: string
+
+  RestSyncInfo* = object
+    head_slot*: Slot
+    sync_distance*: uint64
+    is_syncing*: bool
 
   RestConfig* = object
     MAX_COMMITTEES_PER_SLOT*: uint64
@@ -116,14 +119,18 @@ type
   DataEnclosedObject*[T] = object
     data*: T
 
+  DataRootEnclosedObject*[T] = object
+    dependent_root*: Eth2Digest
+    data*: T
+
   DataRestBeaconGenesis* = DataEnclosedObject[RestBeaconGenesis]
   DataRestFork* = DataEnclosedObject[Fork]
-  DataRestProposerDuties* = DataEnclosedObject[seq[RestProposerDuty]]
-  DataRestAttesterDuties* = DataEnclosedObject[seq[RestAttesterDuty]]
+  DataRestProposerDuties* = DataRootEnclosedObject[seq[RestProposerDuty]]
+  DataRestAttesterDuties* = DataRootEnclosedObject[seq[RestAttesterDuty]]
   DataRestBeaconBlock* = DataEnclosedObject[BeaconBlock]
   DataRestAttestationData* = DataEnclosedObject[AttestationData]
   DataRestAttestation* = DataEnclosedObject[Attestation]
-  DataRestSyncInfo* = DataEnclosedObject[SyncInfo]
+  DataRestSyncInfo* = DataEnclosedObject[RestSyncInfo]
   DataRestValidator* = DataEnclosedObject[RestValidator]
   DataRestValidatorList* = DataEnclosedObject[seq[RestValidator]]
   DataRestVersion* = DataEnclosedObject[RestVersion]
@@ -131,7 +138,7 @@ type
 
   EncodeTypes* = SignedBeaconBlock | seq[ValidatorIndex] |
                  seq[AttestationData] | seq[SignedAggregateAndProof] |
-                 RestCommitteeSubscriptionList
+                 seq[RestCommitteeSubscription]
 
   DecodeTypes* = DataRestBeaconGenesis | DataRestFork | DataRestProposerDuties |
                  DataRestAttesterDuties | DataRestBeaconBlock |
