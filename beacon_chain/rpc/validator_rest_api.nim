@@ -389,8 +389,8 @@ proc getProposerDuties*(epoch: Epoch): RestResponse[DataRestProposerDuties] {.
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/getProposerDuties
 
 proc getAttesterDuties*(epoch: Epoch,
-                       body: seq[ValidatorIndex]
-                      ): RestResponse[DataRestAttesterDuties] {.
+                        body: seq[ValidatorIndex]
+                       ): RestResponse[DataRestAttesterDuties] {.
      rest, endpoint: "/api/eth/v1/validator/duties/attester/{epoch}",
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/getAttesterDuties

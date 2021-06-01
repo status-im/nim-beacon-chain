@@ -26,24 +26,26 @@ func init*(T: type ValidatorPool,
   ## `genesis_validators_root` is used as an unique ID for the
   ## blockchain
   ## `backend` is the KeyValue Store backend
-  T(
-    slashingProtection: slashingProtectionDB
-  )
+  T(slashingProtection: slashingProtectionDB)
 
 template count*(pool: ValidatorPool): int =
-  pool.validators.len
+  len(pool.validators)
 
 proc addLocalValidator*(pool: var ValidatorPool,
                         pubKey: CookedPubKey,
                         privKey: ValidatorPrivKey,
                         index: Option[ValidatorIndex]) =
-  let v = AttachedValidator(pubKey: pubKey,
-                            index: index,
-                            kind: inProcess,
+  let v = AttachedValidator(kind: inProcess, pubKey: pubKey, index: index,
                             privKey: privKey)
   pool.validators[pubKey.toPubKey()] = v
   notice "Local validator attached", pubKey, validator = shortLog(v)
+  validators.set(pool.count().int64)
 
+proc addLocalValidator*(pool: var ValidatorPool, pubKey: ValidatorPubKey,
+                        privKey: ValidatorPrivKey) =
+  let v = AttachedValidator(kind: inProcess, pubKey: pubKey, privKey: privKey)
+  pool.validators[pubKey] = v
+  notice "Local validator attached", pubKey, validator = shortLog(v)
   validators.set(pool.count().int64)
 
 proc addRemoteValidator*(pool: var ValidatorPool,
@@ -51,12 +53,39 @@ proc addRemoteValidator*(pool: var ValidatorPool,
                          v: AttachedValidator) =
   pool.validators[pubKey.toPubKey()] = v
   notice "Remote validator attached", pubKey, validator = shortLog(v)
-
   validators.set(pool.count().int64)
 
 proc getValidator*(pool: ValidatorPool,
                    validatorKey: ValidatorPubKey): AttachedValidator =
   pool.validators.getOrDefault(validatorKey)
+
+proc contains*(pool: ValidatorPool, pubKey: ValidatorPubKey): bool =
+  ## Returns ``true`` if validator with key ``pubKey`` present in ``pool``.
+  pool.validators.contains(pubKey)
+
+proc removeValidator*(pool: var ValidatorPool, pubKey: ValidatorPubKey) =
+  ## Delete validator with public key ``pubKey`` from ``pool``.
+  pool.validators.del(pubKey)
+
+proc updateValidator*(pool: var ValidatorPool, pubKey: ValidatorPubKey,
+                      index: ValidatorIndex) =
+  ## Set validator ``index`` to validator with public key ``pubKey`` stored
+  ## in ``pool``.
+  ## This procedure will not raise if validator with public key ``pubKey`` is
+  ## not present in the pool.
+  var v: AttachedValidator
+  if pool.validators.pop(pubKey, v):
+    v.index = some(index)
+    pool.validators[pubKey] = v
+
+iterator publicKeys*(pool: ValidatorPool): ValidatorPubKey =
+  for item in pool.validators.keys():
+    yield item
+
+iterator indices*(pool: ValidatorPool): ValidatorIndex =
+  for item in pool.validators.values():
+    if item.index.isSome():
+      yield item.index.get()
 
 proc signWithRemoteValidator(v: AttachedValidator, data: Eth2Digest):
     Future[ValidatorSig] {.async.} =
@@ -71,70 +100,81 @@ proc signBlockProposal*(v: AttachedValidator, fork: Fork,
                         genesis_validators_root: Eth2Digest, slot: Slot,
                         blockRoot: Eth2Digest): Future[ValidatorSig] {.async.} =
   return if v.kind == inProcess:
-    get_block_signature(
-      fork, genesis_validators_root, slot, blockRoot, v.privKey).toValidatorSig()
+    get_block_signature(fork, genesis_validators_root, slot, blockRoot,
+                        v.privKey).toValidatorSig()
   else:
-    let root = compute_block_root(fork, genesis_validators_root, slot, blockRoot)
+    let root = compute_block_root(fork, genesis_validators_root, slot,
+                                  blockRoot)
     await signWithRemoteValidator(v, root)
 
 proc signAttestation*(v: AttachedValidator,
                       data: AttestationData,
                       fork: Fork, genesis_validators_root: Eth2Digest):
                       Future[ValidatorSig] {.async.} =
-  return if v.kind == inProcess:
-    get_attestation_signature(
-      fork, genesis_validators_root, data, v.privKey).toValidatorSig()
-  else:
-    let root = compute_attestation_root(fork, genesis_validators_root, data)
-    await signWithRemoteValidator(v, root)
+  return
+    if v.kind == inProcess:
+      get_attestation_signature(fork, genesis_validators_root, data,
+                                v.privKey).toValidatorSig()
+    else:
+      let root = compute_attestation_root(fork, genesis_validators_root, data)
+      await signWithRemoteValidator(v, root)
 
 proc produceAndSignAttestation*(validator: AttachedValidator,
                                 attestationData: AttestationData,
                                 committeeLen: int, indexInCommittee: Natural,
-                                fork: Fork, genesis_validators_root: Eth2Digest):
+                                fork: Fork,
+                                genesis_validators_root: Eth2Digest):
                                 Future[Attestation] {.async.} =
-  let validatorSignature = await validator.signAttestation(attestationData,
-    fork, genesis_validators_root)
+  let validatorSignature =
+    await validator.signAttestation(attestationData, fork,
+                                    genesis_validators_root)
 
   var aggregationBits = CommitteeValidatorsBits.init(committeeLen)
   aggregationBits.setBit indexInCommittee
 
-  return Attestation(data: attestationData, signature: validatorSignature, aggregation_bits: aggregationBits)
+  return Attestation(data: attestationData, signature: validatorSignature,
+                     aggregation_bits: aggregationBits)
 
 proc signAggregateAndProof*(v: AttachedValidator,
                             aggregate_and_proof: AggregateAndProof,
                             fork: Fork, genesis_validators_root: Eth2Digest):
                             Future[ValidatorSig] {.async.} =
-  return if v.kind == inProcess:
-    get_aggregate_and_proof_signature(
-      fork, genesis_validators_root, aggregate_and_proof, v.privKey).toValidatorSig()
-  else:
-    let root = compute_aggregate_and_proof_root(
-      fork, genesis_validators_root, aggregate_and_proof)
-    await signWithRemoteValidator(v, root)
+  return
+    if v.kind == inProcess:
+      get_aggregate_and_proof_signature(fork, genesis_validators_root,
+                                        aggregate_and_proof,
+                                        v.privKey).toValidatorSig()
+    else:
+      let root = compute_aggregate_and_proof_root(fork, genesis_validators_root,
+                                                  aggregate_and_proof)
+      await signWithRemoteValidator(v, root)
 
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/validator.md#randao-reveal
 func genRandaoReveal*(k: ValidatorPrivKey, fork: Fork,
-    genesis_validators_root: Eth2Digest, slot: Slot): CookedSig =
-  get_epoch_signature(
-    fork, genesis_validators_root, slot.compute_epoch_at_slot, k)
+                      genesis_validators_root: Eth2Digest,
+                      slot: Slot): CookedSig =
+  get_epoch_signature(fork, genesis_validators_root,
+                      slot.compute_epoch_at_slot, k)
 
 proc genRandaoReveal*(v: AttachedValidator, fork: Fork,
                       genesis_validators_root: Eth2Digest, slot: Slot):
                       Future[ValidatorSig] {.async.} =
-  return if v.kind == inProcess:
-    genRandaoReveal(v.privKey, fork, genesis_validators_root, slot).toValidatorSig()
-  else:
-    let root = compute_epoch_root(
-      fork, genesis_validators_root, slot.compute_epoch_at_slot)
-    await signWithRemoteValidator(v, root)
+  return
+    if v.kind == inProcess:
+      genRandaoReveal(v.privKey, fork, genesis_validators_root,
+                      slot).toValidatorSig()
+    else:
+      let root = compute_epoch_root(fork, genesis_validators_root,
+                                    slot.compute_epoch_at_slot)
+      await signWithRemoteValidator(v, root)
 
 proc getSlotSig*(v: AttachedValidator, fork: Fork,
                  genesis_validators_root: Eth2Digest, slot: Slot
                  ): Future[ValidatorSig] {.async.} =
-  return if v.kind == inProcess:
-    get_slot_signature(
-      fork, genesis_validators_root, slot, v.privKey).toValidatorSig()
-  else:
-    let root = compute_slot_root(fork, genesis_validators_root, slot)
-    await signWithRemoteValidator(v, root)
+  return
+    if v.kind == inProcess:
+      get_slot_signature(fork, genesis_validators_root, slot,
+                         v.privKey).toValidatorSig()
+    else:
+      let root = compute_slot_root(fork, genesis_validators_root, slot)
+      await signWithRemoteValidator(v, root)

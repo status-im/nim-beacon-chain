@@ -92,6 +92,15 @@ proc now*(c: BeaconClock): BeaconTime =
   ## Current time, in slots - this may end up being less than GENESIS_SLOT(!)
   toBeaconTime(c, getTime())
 
+proc durationToNextSlot*(c: BeaconClock): Duration =
+  let duration = Duration(c.now())
+  let timestamp = nanoseconds(duration)
+  if timestamp >= 0:
+    let nextSlot = Slot(uint64(seconds(duration)) div SECONDS_PER_SLOT) + 1'u64
+    seconds(int64(nextSlot * SECONDS_PER_SLOT)) - duration
+  else:
+    nanoseconds(-timestamp)
+
 proc fromNow*(c: BeaconClock, t: BeaconTime): tuple[inFuture: bool, offset: Duration] =
   let now = c.now()
   if t > now:

@@ -22,27 +22,7 @@ logScope: topics = "rest_beaconapi"
 const
   # https://github.com/ethereum/eth2.0-APIs/blob/master/apis/beacon/states/validator_balances.yaml#L17
   # https://github.com/ethereum/eth2.0-APIs/blob/master/apis/beacon/states/validators.yaml#L17
-  MaximumValidatorIds = 30
-
-type
-  RestValidator* = object
-    index*: ValidatorIndex
-    balance*: string
-    status*: string
-    validator*: Validator
-
-  RestValidatorBalance* = object
-    index*: ValidatorIndex
-    balance*: string
-
-  RestBeaconStatesCommittees* = object
-    index*: CommitteeIndex
-    slot*: Slot
-    validators*: seq[ValidatorIndex]
-
-  RestAttestationsFailure* = object
-    index*: uint64
-    message*: string
+  MaximumValidatorIds* = 30
 
 proc validateFilter(filters: seq[ValidatorFilter]): Result[ValidatorFilter,
                                                            cstring] =

@@ -41,6 +41,19 @@ type
     genesis_validators_root*: Eth2Digest
     genesis_fork_version*: Version
 
+  RestValidatorBalance* = object
+    index*: ValidatorIndex
+    balance*: string
+
+  RestBeaconStatesCommittees* = object
+    index*: CommitteeIndex
+    slot*: Slot
+    validators*: seq[ValidatorIndex]
+
+  RestAttestationsFailure* = object
+    index*: uint64
+    message*: string
+
   RestValidator* = object
     index*: ValidatorIndex
     balance*: string
@@ -136,7 +149,7 @@ type
   DataRestVersion* = DataEnclosedObject[RestVersion]
   DataRestConfig* = DataEnclosedObject[RestConfig]
 
-  EncodeTypes* = SignedBeaconBlock | seq[ValidatorIndex] |
+  EncodeTypes* = SignedBeaconBlock |
                  seq[AttestationData] | seq[SignedAggregateAndProof] |
                  seq[RestCommitteeSubscription]
 
@@ -531,6 +544,17 @@ proc encodeBytes*[T: EncodeTypes](value: T,
     writer.beginRecord()
     writer.writeField("data", value)
     writer.endRecord()
+    ok(stream.getOutput(seq[byte]))
+  else:
+    err("Content-Type not supported")
+
+proc encodeBytes*(value: seq[ValidatorIndex],
+                  contentType: string): RestResult[seq[byte]] =
+  case contentType
+  of "application/json":
+    var stream = memoryOutput()
+    var writer = JsonWriter[RestJson].init(stream)
+    writer.writeArray(value)
     ok(stream.getOutput(seq[byte]))
   else:
     err("Content-Type not supported")
