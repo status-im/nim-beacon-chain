@@ -32,26 +32,25 @@ template count*(pool: ValidatorPool): int =
   len(pool.validators)
 
 proc addLocalValidator*(pool: var ValidatorPool,
-                        pubKey: CookedPubKey,
                         privKey: ValidatorPrivKey,
                         index: Option[ValidatorIndex]) =
+  let pubKey = privKey.toPubKey().toPubKey()
   let v = AttachedValidator(kind: inProcess, pubKey: pubKey, index: index,
                             privKey: privKey)
-  pool.validators[pubKey.toPubKey()] = v
+  pool.validators[pubKey] = v
   notice "Local validator attached", pubKey, validator = shortLog(v)
   validators.set(pool.count().int64)
 
-proc addLocalValidator*(pool: var ValidatorPool, pubKey: ValidatorPubKey,
-                        privKey: ValidatorPrivKey) =
+proc addLocalValidator*(pool: var ValidatorPool, privKey: ValidatorPrivKey) =
+  let pubKey = privKey.toPubKey().toPubKey()
   let v = AttachedValidator(kind: inProcess, pubKey: pubKey, privKey: privKey)
   pool.validators[pubKey] = v
   notice "Local validator attached", pubKey, validator = shortLog(v)
   validators.set(pool.count().int64)
 
-proc addRemoteValidator*(pool: var ValidatorPool,
-                         pubKey: CookedPubKey,
+proc addRemoteValidator*(pool: var ValidatorPool, pubKey: ValidatorPubKey,
                          v: AttachedValidator) =
-  pool.validators[pubKey.toPubKey()] = v
+  pool.validators[pubKey] = v
   notice "Remote validator attached", pubKey, validator = shortLog(v)
   validators.set(pool.count().int64)
 
@@ -87,8 +86,8 @@ iterator indices*(pool: ValidatorPool): ValidatorIndex =
     if item.index.isSome():
       yield item.index.get()
 
-proc signWithRemoteValidator(v: AttachedValidator, data: Eth2Digest):
-    Future[ValidatorSig] {.async.} =
+proc signWithRemoteValidator(v: AttachedValidator,
+                             data: Eth2Digest): Future[ValidatorSig] {.async.} =
   v.connection.inStream.writeLine(v.connection.pubKeyStr, " ", $data)
   v.connection.inStream.flush()
   var line = newStringOfCap(120).TaintedString

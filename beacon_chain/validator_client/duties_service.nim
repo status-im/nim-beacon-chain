@@ -103,6 +103,7 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch) {.async.} =
     vc.attesters[duty.pubkey] = map
 
 proc pollForBeaconProposers*(vc: ValidatorClientRef, epoch: Epoch) {.async.} =
+  discard
 
 proc mainLoop(service: DutiesServiceRef) {.async.} =
   while true:
