@@ -409,11 +409,6 @@ proc produceAttestationData*(slot: Slot,
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/produceAttestationData
 
-proc submitPoolAttestations*(body: seq[AttestationData]): RestPlainResponse {.
-     rest, endpoint: "/api/eth/v1/beacon/pool/attestations",
-     meth: MethodPost.}
-  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/submitPoolAttestations
-
 proc getAggregatedAttestation*(attestation_data_root: Eth2Digest,
                                slot: Slot): RestResponse[DataRestAttestation] {.
      rest, endpoint: "/api/eth/v1/validator/aggregate_attestation"

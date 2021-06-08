@@ -170,7 +170,8 @@ template untilSuccess*(vc: ValidatorClientRef, body: untyped,
             debug "Unexpected exception", error_name = exc.name,
                   error_msg = exc.msg, endpoint = node
             node.status = BeaconNodeStatus.Offline
-            none[ResType]()
+            raiseAssert "Error happens"
+            # none[ResType]()
 
         if optresp.isSome():
           let response {.inject.} = optresp.get()
@@ -211,6 +212,7 @@ template untilSuccess*(vc: ValidatorClientRef, body: untyped,
 proc getProposerDuties*(vc: ValidatorClientRef,
                         epoch: Epoch): Future[DataRestProposerDuties] {.
      async.} =
+  logScope: request = "getProposerDuties"
   vc.untilSuccess(await getProposerDuties(it, epoch)):
     case response.status
     of 200:
@@ -236,6 +238,7 @@ proc getProposerDuties*(vc: ValidatorClientRef,
 proc getAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch,
                         validators: seq[ValidatorIndex]
                        ): Future[DataRestAttesterDuties] {.async.} =
+  logScope: request = "getAttesterDuties"
   vc.untilSuccess(await getAttesterDuties(it, epoch, validators)):
     case response.status
     of 200:
@@ -258,13 +261,14 @@ proc getAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch,
             response_code = response.status, endpoint = node
       BeaconNodeStatus.Offline
 
-proc getHeadStateFork*(vc: ValidatorClientRef): Future[DataRestFork] {.async.} =
+proc getHeadStateFork*(vc: ValidatorClientRef): Future[Fork] {.async.} =
+  logScope: request = "getHeadStateFork"
   let stateIdent = StateIdent.init(StateIdentType.Head)
   vc.untilSuccess(await getStateFork(it, stateIdent)):
     case response.status
     of 200:
       debug "Received successfull response", endpoint = node
-      return response.data
+      return response.data.data
     of 400, 404:
       debug "Received invalid request response",
             response_code = response.status, endpoint = node
@@ -281,6 +285,7 @@ proc getHeadStateFork*(vc: ValidatorClientRef): Future[DataRestFork] {.async.} =
 proc getValidators*(vc: ValidatorClientRef,
                     id: seq[ValidatorIdent]): Future[seq[RestValidator]] {.
      async.} =
+  logScope: request = "getStateValidators"
   let stateIdent = StateIdent.init(StateIdentType.Head)
   vc.untilSuccess(await getStateValidators(it, stateIdent, id)):
     case response.status
@@ -288,6 +293,98 @@ proc getValidators*(vc: ValidatorClientRef,
       debug "Received successfull response", endpoint = node
       return response.data.data
     of 400, 404:
+      debug "Received invalid request response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+    of 500:
+      debug "Received internal error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+    else:
+      debug "Received unexpected error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+
+proc produceAttestationData*(vc: ValidatorClientRef,  slot: Slot,
+                             committee_index: CommitteeIndex
+                            ): Future[AttestationData] {.async.} =
+  logScope: request = "produceAttestationData"
+  vc.untilSuccess(await produceAttestationData(it, slot, committee_index)):
+    case response.status
+    of 200:
+      debug "Received successfull response", endpoint = node
+      return response.data.data
+    of 400:
+      debug "Received invalid request response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+    of 500:
+      debug "Received internal error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+    of 503:
+      debug "Received not synced error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.NotSynced
+    else:
+      debug "Received unexpected error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+
+proc submitPoolAttestations*(vc: ValidatorClientRef,
+                             data: seq[Attestation]): Future[bool] {.
+     async.} =
+  logScope: request = "submitPoolAttestations"
+  vc.untilSuccess(await submitPoolAttestations(it, data)):
+    case response.status
+    of 200:
+      debug "Received successfull response", endpoint = node
+      return true
+    of 400:
+      debug "Received invalid request response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+    of 500:
+      debug "Received internal error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+    else:
+      debug "Received unexpected error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+
+proc getAggregatedAttestation*(vc: ValidatorClientRef, slot: Slot,
+                               root: Eth2Digest): Future[Attestation] {.
+     async.} =
+  logScope: request = "getAggregatedAttestation"
+  vc.untilSuccess(await getAggregatedAttestation(it, root, slot)):
+    case response.status:
+    of 200:
+      debug "Received successfull response", endpoint = node
+      return response.data.data
+    of 400:
+      debug "Received invalid request response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+    of 500:
+      debug "Received internal error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+    else:
+      debug "Received unexpected error response",
+            response_code = response.status, endpoint = node
+      BeaconNodeStatus.Offline
+
+proc publishAggregateAndProofs*(vc: ValidatorClientRef,
+                            data: seq[SignedAggregateAndProof]): Future[bool] {.
+     async.} =
+  logScope: request = "publishAggregateAndProofs"
+  vc.untilSuccess(await publishAggregateAndProofs(it, data)):
+    case response.status:
+    of 200:
+      debug "Received successfull response", endpoint = node
+      return true
+    of 400:
       debug "Received invalid request response",
             response_code = response.status, endpoint = node
       BeaconNodeStatus.Offline

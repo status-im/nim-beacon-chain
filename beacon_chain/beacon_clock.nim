@@ -9,7 +9,7 @@
 
 import
   chronos, chronicles,
-  ./spec/datatypes
+  ./spec/[datatypes, helpers]
 
 from times import Time, getTime, fromUnix, `<`, `-`, inNanoseconds
 
@@ -97,6 +97,17 @@ proc durationToNextSlot*(c: BeaconClock): Duration =
   let timestamp = nanoseconds(duration)
   if timestamp >= 0:
     let nextSlot = Slot(uint64(seconds(duration)) div SECONDS_PER_SLOT) + 1'u64
+    seconds(int64(nextSlot * SECONDS_PER_SLOT)) - duration
+  else:
+    nanoseconds(-timestamp)
+
+proc durationToNextEpoch*(c: BeaconClock): Duration =
+  let duration = Duration(c.now())
+  let timestamp = nanoseconds(duration)
+  if timestamp >= 0:
+    let
+      currentSlot = Slot(uint64(seconds(duration)) div SECONDS_PER_SLOT)
+      nextSlot = compute_start_slot_at_epoch(currentSlot.epoch() + 1'u64)
     seconds(int64(nextSlot * SECONDS_PER_SLOT)) - duration
   else:
     nanoseconds(-timestamp)

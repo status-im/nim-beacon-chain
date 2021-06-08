@@ -962,3 +962,8 @@ proc getStateValidators*(state_id: StateIdent,
      endpoint: "/api/eth/v1/beacon/states/{state_id}/validators",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateValidators
+
+proc submitPoolAttestations*(body: seq[Attestation]): RestPlainResponse {.
+     rest, endpoint: "/api/eth/v1/beacon/pool/attestations",
+     meth: MethodPost.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/submitPoolAttestations

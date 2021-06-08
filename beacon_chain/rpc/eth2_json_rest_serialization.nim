@@ -149,10 +149,9 @@ type
   DataRestVersion* = DataEnclosedObject[RestVersion]
   DataRestConfig* = DataEnclosedObject[RestConfig]
 
-  EncodeTypes* = SignedBeaconBlock |
-                 seq[AttestationData] | seq[SignedAggregateAndProof] |
-                 seq[RestCommitteeSubscription]
-
+  EncodeTypes* = SignedBeaconBlock | seq[RestCommitteeSubscription]
+  EncodeArrays* = seq[ValidatorIndex] | seq[Attestation] |
+                  seq[SignedAggregateAndProof]
   DecodeTypes* = DataRestBeaconGenesis | DataRestFork | DataRestProposerDuties |
                  DataRestAttesterDuties | DataRestBeaconBlock |
                  DataRestAttestationData | DataRestAttestation |
@@ -548,8 +547,8 @@ proc encodeBytes*[T: EncodeTypes](value: T,
   else:
     err("Content-Type not supported")
 
-proc encodeBytes*(value: seq[ValidatorIndex],
-                  contentType: string): RestResult[seq[byte]] =
+proc encodeBytes*[T: EncodeArrays](value: T,
+                                   contentType: string): RestResult[seq[byte]] =
   case contentType
   of "application/json":
     var stream = memoryOutput()

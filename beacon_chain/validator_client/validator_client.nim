@@ -1,5 +1,6 @@
 import common
-import fallback_service, duties_service
+import fallback_service, duties_service, attestation_service, fork_service,
+       block_service
 
 proc initGenesis*(vc: ValidatorClientRef): Future[RestBeaconGenesis] {.async.} =
   info "Initializing genesis", nodes_count = len(vc.beaconNodes)
@@ -80,12 +81,28 @@ proc initValidators*(vc: ValidatorClientRef): Future[bool] {.async.} =
       vc.attachedValidators.addLocalValidator(key)
   return true
 
+proc initClock*(vc: ValidatorClientRef): Future[BeaconClock] {.async.} =
+  # This procedure performs initialization of BeaconClock using current genesis
+  # information. It also performs waiting for genesis.
+  let res = BeaconClock.init(vc.beaconGenesis.genesis_time)
+  let currentSlot = res.now().slotOrZero()
+  let currentEpoch = currentSlot.epoch()
+  info "Initializing beacon clock",
+       genesis_time = vc.beaconGenesis.genesis_time,
+       current_slot = currentSlot, current_epoch = currentEpoch
+  let genesisTime = res.fromNow(toBeaconTime(Slot(0)))
+  if genesisTime.inFuture:
+    notice "Waiting for genesis", genesisIn = genesisTime.offset
+    await sleepAsync(genesisTime.offset)
+  return res
+
 proc asyncInit*(vc: ValidatorClientRef) {.async.} =
   vc.beaconGenesis = await vc.initGenesis()
   info "Genesis information", genesis_time = vc.beaconGenesis.genesis_time,
     genesis_fork_version = vc.beaconGenesis.genesis_fork_version,
     genesis_root = vc.beaconGenesis.genesis_validators_root
-  vc.beaconClock = BeaconClock.init(vc.beaconGenesis.genesis_time)
+
+  vc.beaconClock = await vc.initClock()
 
   if not(await initValidators(vc)):
     fatal "Could not initialize local validators"
@@ -97,8 +114,11 @@ proc asyncInit*(vc: ValidatorClientRef) {.async.} =
       vc.config.validatorsDir(), "slashing_protection"
     )
 
-  vc.fallbackService = FallbackServiceRef.start(vc)
-  vc.dutiesService = DutiesServiceRef.start(vc)
+  vc.fallbackService = await FallbackServiceRef.init(vc)
+  vc.forkService = await ForkServiceRef.init(vc)
+  vc.dutiesService = await DutiesServiceRef.init(vc)
+  vc.attestationService = await AttestationServiceRef.init(vc)
+  vc.blockService = await BlockServiceRef.init(vc)
 
 proc onSlotStart(vc: ValidatorClientRef, wallTime: BeaconTime,
                  lastSlot: Slot) {.async.} =
@@ -125,6 +145,12 @@ proc onSlotStart(vc: ValidatorClientRef, wallTime: BeaconTime,
     delay = shortLog(delay)
 
 proc asyncRun*(vc: ValidatorClientRef) {.async.} =
+  vc.fallbackService.start()
+  vc.forkService.start()
+  vc.dutiesService.start()
+  vc.attestationService.start()
+  vc.blockService.start()
+
   await runSlotLoop(vc, vc.beaconClock.now(), onSlotStart)
 
 programMain:
@@ -165,7 +191,8 @@ programMain:
                          config.graffiti.get()
                        else:
                          defaultGraffitiBytes(),
-        nodesAvailable: newAsyncEvent()
+        nodesAvailable: newAsyncEvent(),
+        blocksQueue: newAsyncQueue[BlockServiceEventRef](1)
       )
 
       waitFor asyncInit(vc)

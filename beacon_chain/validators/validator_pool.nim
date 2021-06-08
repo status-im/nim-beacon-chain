@@ -86,6 +86,10 @@ iterator indices*(pool: ValidatorPool): ValidatorIndex =
     if item.index.isSome():
       yield item.index.get()
 
+iterator items*(pool: ValidatorPool): AttachedValidator =
+  for item in pool.validators.values():
+    yield item
+
 proc signWithRemoteValidator(v: AttachedValidator,
                              data: Eth2Digest): Future[ValidatorSig] {.async.} =
   v.connection.inStream.writeLine(v.connection.pubKeyStr, " ", $data)

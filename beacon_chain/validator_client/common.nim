@@ -11,6 +11,7 @@ import ".."/networking/[eth2_network, eth2_discovery],
                         validator_pool, slashing_protection],
        ".."/[conf, beacon_clock, version, beacon_node_types,
              nimbus_binary_common],
+       ".."/ssz/merkleization,
        ./eth/db/[kvstore, kvstore_sqlite3]
 
 export os, tables, sequtils, chronos, presto, chronicles, confutils,
@@ -19,19 +20,25 @@ export os, tables, sequtils, chronos, presto, chronicles, confutils,
 
 export beacon_rest_api, node_rest_api, validator_rest_api, config_rest_api,
        rest_utils,
-       datatypes, crypto, digest,
+       datatypes, crypto, digest, signatures, merkleization,
        beacon_clock,
        kvstore, kvstore_sqlite3,
-       keystore_management, slashing_protection, validator_pool
+       keystore_management, slashing_protection, validator_pool,
+       attestation_aggregation
 
 const
   SYNC_TOLERANCE* = 4'u64
   SLOT_LOOKAHEAD* = 1.seconds
   HISTORICAL_DUTIES_EPOCHS* = 2'u64
+  TIME_DELAY_FROM_SLOT* = 79.milliseconds
 
 type
   ServiceState* {.pure.} = enum
-    Running, Error, Closing, Closed
+    Initialized, Running, Error, Closing, Closed
+
+  BlockServiceEventRef* = ref object of RootObj
+    slot*: Slot
+    proposers*: seq[ValidatorPubKey]
 
   ClientServiceRef* = ref object of RootObj
     state*: ServiceState
@@ -41,6 +48,12 @@ type
   DutiesServiceRef* = ref object of ClientServiceRef
 
   FallbackServiceRef* = ref object of ClientServiceRef
+
+  ForkServiceRef* = ref object of ClientServiceRef
+
+  AttestationServiceRef* = ref object of ClientServiceRef
+
+  BlockServiceRef* = ref object of ClientServiceRef
 
   DutyAndProof* = object
     epoch*: Epoch
@@ -75,14 +88,18 @@ type
     beaconNodes*: seq[BeaconNodeServerRef]
     nodesAvailable*: AsyncEvent
     fallbackService*: FallbackServiceRef
+    forkService*: ForkServiceRef
     dutiesService*: DutiesServiceRef
+    attestationService*: AttestationServiceRef
+    blockService*: BlockServiceRef
     runSlotLoop*: Future[void]
     beaconClock*: BeaconClock
     attachedValidators*: ValidatorPool
-    fork*: Fork
+    fork*: Option[Fork]
     attesters*: AttesterMap
     proposers*: ProposerMap
     beaconGenesis*: RestBeaconGenesis
+    blocksQueue*: AsyncQueue[BlockServiceEventRef]
 
   ValidatorClientRef* = ref ValidatorClient
 
@@ -129,3 +146,28 @@ proc init*(t: typedesc[DutyAndProof], epoch: Epoch, dependentRoot: Eth2Digest,
 proc init*(t: typedesc[ProposedData], epoch: Epoch, dependentRoot: Eth2Digest,
            data: openarray[RestProposerDuty]): ProposedData =
   ProposedData(epoch: epoch, dependentRoot: dependentRoot, data: @data)
+
+proc getCurrentSlot*(vc: ValidatorClientRef): Option[Slot] =
+  let
+    wallTime = vc.beaconClock.now()
+    wallSlot = wallTime.toSlot()
+
+  if not(wallSlot.afterGenesis):
+    let checkGenesisTime = vc.beaconClock.fromNow(toBeaconTime(Slot(0)))
+    warn "Jump in time detected, something wrong with wallclock",
+         wall_time = wallTime, genesisIn = checkGenesisTime.offset
+    none[Slot]()
+  else:
+    some(wallSlot.slot)
+
+proc getAttesterDutiesForSlot*(vc: ValidatorClientRef,
+                               slot: Slot): seq[RestAttesterDuty] =
+  ## Returns all `DutyAndPrrof` for the given `slot`.
+  var res: seq[RestAttesterDuty]
+  let epoch = slot.epoch()
+  for key, item in vc.attesters.pairs():
+    let duty = item.getOrDefault(epoch, DefaultDutyAndProof)
+    if not(duty.isDefault()):
+      if duty.data.slot == slot:
+        res.add(duty.data)
+  res
