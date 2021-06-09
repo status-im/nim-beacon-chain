@@ -709,6 +709,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
 
     var failures: seq[RestAttestationsFailure]
     for atindex, attestation in attestations.pairs():
+      debug "Attestation for pool", attestation = attestation, signature = $attestation.signature
       if not await node.sendAttestation(attestation):
         failures.add(RestAttestationsFailure(
           index: uint64(atindex), message: "Attestation failed validation"))

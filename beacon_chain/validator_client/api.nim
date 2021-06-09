@@ -331,6 +331,17 @@ proc produceAttestationData*(vc: ValidatorClientRef,  slot: Slot,
             response_code = response.status, endpoint = node
       BeaconNodeStatus.Offline
 
+proc getAttestationErrorMessage(response: RestPlainResponse): string =
+  let res = decodeBytes(RestAttestationError, response.data,
+                        response.contentType)
+  if res.isOk():
+    let errorObj = res.get()
+    let failures = errorObj.failures.mapIt(Base10.toString(it.index) & ": " &
+                                           it.message)
+    errorObj.message & ": [" & failures.join(", ") & "]"
+  else:
+    "Unable to decode error response: [" & $res.error() & "]"
+
 proc submitPoolAttestations*(vc: ValidatorClientRef,
                              data: seq[Attestation]): Future[bool] {.
      async.} =
@@ -342,15 +353,18 @@ proc submitPoolAttestations*(vc: ValidatorClientRef,
       return true
     of 400:
       debug "Received invalid request response",
-            response_code = response.status, endpoint = node
+            response_code = response.status, endpoint = node,
+            response_error = response.getAttestationErrorMessage()
       BeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
-            response_code = response.status, endpoint = node
+            response_code = response.status, endpoint = node,
+            response_error = response.getAttestationErrorMessage()
       BeaconNodeStatus.Offline
     else:
       debug "Received unexpected error response",
-            response_code = response.status, endpoint = node
+            response_code = response.status, endpoint = node,
+            response_error = response.getAttestationErrorMessage()
       BeaconNodeStatus.Offline
 
 proc getAggregatedAttestation*(vc: ValidatorClientRef, slot: Slot,

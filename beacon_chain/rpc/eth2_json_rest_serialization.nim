@@ -129,6 +129,20 @@ type
     DOMAIN_SELECTION_PROOF*: DomainType
     DOMAIN_AGGREGATE_AND_PROOF*: DomainType
 
+  RestGenericError* = object
+    code*: uint64
+    message*: string
+    stacktraces*: Option[string]
+
+  RestAttestationFailure* = object
+    index*: uint64
+    message*: string
+
+  RestAttestationError* = object
+    code*: uint64
+    message*: string
+    failures*: seq[RestAttestationsFailure]
+
   DataEnclosedObject*[T] = object
     data*: T
 
@@ -157,7 +171,7 @@ type
                  DataRestAttestationData | DataRestAttestation |
                  DataRestSyncInfo | DataRestValidator |
                  DataRestValidatorList | DataRestVersion |
-                 DataRestConfig
+                 DataRestConfig | RestGenericError | RestAttestationError
 
 proc jsonResponseWRoot*(t: typedesc[RestApiResponse],
                         data: auto,
@@ -609,3 +623,4 @@ proc encodeString*(value: StateIdent): RestResult[string] =
       ok("finalized")
     of StateIdentType.Justified:
       ok("justified")
+

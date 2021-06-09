@@ -14,6 +14,12 @@ chronicles.formatIt(DutiesServiceLoop):
   of ProposerLoop: "proposer_loop"
   of IndicesLoop: "index_loop"
 
+proc checkDuty(duty: RestAttesterDuty): bool =
+  (duty.committee_length <= MAX_VALIDATORS_PER_COMMITTEE) and
+  (uint64(duty.committee_index) <= MAX_COMMITTEES_PER_SLOT) and
+  (uint64(duty.validator_committee_index) <= duty.committee_length) and
+  (uint64(duty.validator_index) <= VALIDATOR_REGISTRY_LIMIT)
+
 proc pollForValidatorIndices*(vc: ValidatorClientRef) {.async.} =
   let stateIdent = StateIdent.init(StateIdentType.Head)
   let validatorIdents =
@@ -96,14 +102,16 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch) {.async.} =
 
     offset += arraySize
 
-  let relevantDuties = duties.filterIt(it.pubkey in vc.attachedValidators)
+  let relevantDuties = duties.filterIt(
+    checkDuty(it) and (it.pubkey in vc.attachedValidators)
+  )
   let dependentRoot = currentRoot.get()
   var alreadyWarned = false
 
   for duty in relevantDuties:
     let dutyAndProof = DutyAndProof.init(epoch, dependentRoot, duty)
-    info "Received attester duty and proof", epoch = epoch,
-          dependent_root = dependentRoot, duty
+    info "Received attester duty and proof", duty, epoch = epoch,
+          dependent_root = dependentRoot
     var map = vc.attesters.getOrDefault(duty.pubkey)
     let epochDuty = map.getOrDefault(epoch, DefaultDutyAndProof)
     if not(epochDuty.isDefault()):
@@ -269,29 +277,22 @@ proc waitForNextSlot(service: DutiesServiceRef,
                      serviceLoop: DutiesServiceLoop) {.async.} =
   let vc = service.client
   let sleepTime = vc.beaconClock.durationToNextSlot()
-  debug "Sleeping until next slot", sleep_time = sleepTime, loop = serviceLoop
   await sleepAsync(sleepTime)
 
 proc attesterDutiesLoop(service: DutiesServiceRef) {.async.} =
-  logScope: loop = AttesterLoop
   let vc = service.client
-  debug "Loop started"
   while true:
     await vc.pollForAttesterDuties()
     await service.waitForNextSlot(AttesterLoop)
 
 proc proposerDutiesLoop(service: DutiesServiceRef) {.async.} =
-  logScope: loop = ProposerLoop
   let vc = service.client
-  debug "Loop started"
   while true:
     await vc.pollForBeaconProposers()
     await service.waitForNextSlot(ProposerLoop)
 
 proc validatorIndexLoop(service: DutiesServiceRef) {.async.} =
-  logScope: loop = IndicesLoop
   let vc = service.client
-  debug "Loop started"
   while true:
     await vc.pollForValidatorIndices()
     await service.waitForNextSlot(IndicesLoop)
@@ -335,8 +336,6 @@ proc mainLoop(service: DutiesServiceRef) {.async.} =
     checkAndRestart(AttesterLoop, fut1, service.attesterDutiesLoop())
     checkAndRestart(ProposerLoop, fut2, service.proposerDutiesLoop())
     checkAndRestart(IndicesLoop, fut3, service.validatorIndexLoop())
-
-  debug "Service stopped"
 
 proc init*(t: typedesc[DutiesServiceRef],
            vc: ValidatorClientRef): Future[DutiesServiceRef] {.async.} =

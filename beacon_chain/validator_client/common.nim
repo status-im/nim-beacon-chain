@@ -1,10 +1,10 @@
-import std/[tables, os, sequtils]
+import std/[tables, os, sequtils, strutils]
 import chronos, presto, presto/client as presto_client, chronicles, confutils,
        json_serialization/std/[options, net],
        stew/[base10, results]
 # Local modules
 import ".."/networking/[eth2_network, eth2_discovery],
-       ".."/spec/[datatypes, digest, crypto, helpers, network, signatures],
+       ".."/spec/[datatypes, digest, crypto, helpers, signatures],
        ".."/rpc/[beacon_rest_api, node_rest_api, validator_rest_api,
                  config_rest_api, rest_utils, eth2_json_rest_serialization],
        ".."/validators/[attestation_aggregation, keystore_management,
@@ -14,8 +14,8 @@ import ".."/networking/[eth2_network, eth2_discovery],
        ".."/ssz/merkleization,
        ./eth/db/[kvstore, kvstore_sqlite3]
 
-export os, tables, sequtils, chronos, presto, chronicles, confutils,
-       nimbus_binary_common, version, conf, options, tables, results,
+export os, tables, sequtils, sequtils, chronos, presto, chronicles, confutils,
+       nimbus_binary_common, version, conf, options, tables, results, base10,
        eth2_json_rest_serialization, presto_client
 
 export beacon_rest_api, node_rest_api, validator_rest_api, config_rest_api,
@@ -118,13 +118,13 @@ chronicles.formatIt BeaconNodeServerRef:
   $it
 
 chronicles.expandIt(RestAttesterDuty):
+  slot = it.slot
   pubkey = shortLog(it.pubkey)
   validator_index = it.validator_index
   committee_index = it.committee_index
   committee_length = it.committee_length
   committees_at_slot = it.committees_at_slot
   validator_committee_index = it.validator_committee_index
-  slot = it.slot
 
 proc stop*(csr: ClientServiceRef) {.async.} =
   if csr.state == ServiceState.Running:

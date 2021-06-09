@@ -38,8 +38,6 @@ proc mainLoop(service: FallbackServiceRef) {.async.} =
           nextTime + seconds(int64(SECONDS_PER_SLOT))
         else:
           nextTime - SLOT_LOOKAHEAD
-    debug "Sleeping till next check", time_to_wait = waitTime,
-          current_slot = service.client.beaconClock.now().slotOrZero()
     await sleepAsync(waitTime)
 
 proc init*(t: typedesc[FallbackServiceRef],

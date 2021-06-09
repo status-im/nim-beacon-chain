@@ -19,22 +19,18 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
   doAssert(MAX_VALIDATORS_PER_COMMITTEE <= uint64(high(int)))
   let vc = service.client
   let ad = await vc.produceAttestationData(slot, committee_index)
-
+  debug "Produced attestation data", attestation_data = ad, epoch = slot.epoch()
   let attestations =
     block:
       var res: seq[Attestation]
       for duty in duties:
+        debug "Serving duty", duty = duty, epoch = slot.epoch()
         if (duty.slot != ad.slot) or
-           (uint64(duty.committee_index) != ad.index) or
-           (duty.committee_length > MAX_VALIDATORS_PER_COMMITTEE) or
-           (uint64(duty.committee_index) >= duty.committee_length):
+           (uint64(duty.committee_index) != ad.index):
           error "Inconsistent validator duties during attestation signing",
                 validator = duty.pubkey, duty_slot = duty.slot,
                 duty_index = duty.committee_index,
-                attestation_slot = ad.slot,
-                attestation_index = ad.index,
-                committee_length = duty.committee_length,
-                committee_index = duty.committee_index
+                attestation_slot = ad.slot, attestation_index = ad.index
           continue
 
         let validator = vc.attachedValidators.getValidator(duty.pubkey)
@@ -60,10 +56,12 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
                badVoteDetails = $notSlashable.error
           continue
 
-        let attestation = await produceAndSignAttestation(
-          validator, ad, int(duty.committee_length),
-          Natural(duty.committee_index), vc.fork.get(),
-          vc.beaconGenesis.genesis_validators_root)
+        let attestation = await validator.produceAndSignAttestation(ad,
+          int(duty.committee_length), Natural(duty.validator_committee_index),
+          vc.fork.get(), vc.beaconGenesis.genesis_validators_root)
+
+        debug "Attestation's aggregation_bits",
+              length = lenu64(attestation.aggregation_bits)
 
         res.add(attestation)
       res
