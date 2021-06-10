@@ -1,7 +1,7 @@
 import std/[tables, os, sequtils, strutils]
 import chronos, presto, presto/client as presto_client, chronicles, confutils,
        json_serialization/std/[options, net],
-       stew/[base10, results]
+       stew/[base10, results, byteutils]
 # Local modules
 import ".."/networking/[eth2_network, eth2_discovery],
        ".."/spec/[datatypes, digest, crypto, helpers, signatures],
@@ -16,7 +16,7 @@ import ".."/networking/[eth2_network, eth2_discovery],
 
 export os, tables, sequtils, sequtils, chronos, presto, chronicles, confutils,
        nimbus_binary_common, version, conf, options, tables, results, base10,
-       eth2_json_rest_serialization, presto_client
+       byteutils, eth2_json_rest_serialization, presto_client
 
 export beacon_rest_api, node_rest_api, validator_rest_api, config_rest_api,
        rest_utils,
@@ -118,8 +118,8 @@ chronicles.formatIt BeaconNodeServerRef:
   $it
 
 chronicles.expandIt(RestAttesterDuty):
-  slot = it.slot
   pubkey = shortLog(it.pubkey)
+  slot = it.slot
   validator_index = it.validator_index
   committee_index = it.committee_index
   committee_length = it.committee_length
@@ -171,3 +171,22 @@ proc getAttesterDutiesForSlot*(vc: ValidatorClientRef,
       if duty.data.slot == slot:
         res.add(duty.data)
   res
+
+proc getDurationToNextAttestation*(vc: ValidatorClientRef,
+                                   slot: Slot): string =
+  var minimumDuration = InfiniteDuration
+  let currentSlotTime = Duration(slot.toBeaconTime())
+  let currentEpoch = slot.epoch()
+  for epoch in [currentEpoch, currentEpoch + 1'u64]:
+    for key, item in vc.attesters.pairs():
+      let duty = item.getOrDefault(epoch, DefaultDutyAndProof)
+      if not(duty.isDefault()):
+        let dutySlotTime = Duration(duty.data.slot.toBeaconTime())
+        if dutySlotTime >= currentSlotTime:
+          let timeLeft = dutySlotTime - currentSlotTime
+          if timeLeft < minimumDuration:
+            minimumDuration = timeLeft
+  if minimumDuration == InfiniteDuration:
+    "<unknown>"
+  else:
+    $(minimumDuration + seconds(int64(SECONDS_PER_SLOT) div 3))

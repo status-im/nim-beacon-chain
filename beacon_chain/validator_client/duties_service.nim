@@ -110,8 +110,6 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch) {.async.} =
 
   for duty in relevantDuties:
     let dutyAndProof = DutyAndProof.init(epoch, dependentRoot, duty)
-    info "Received attester duty and proof", duty, epoch = epoch,
-          dependent_root = dependentRoot
     var map = vc.attesters.getOrDefault(duty.pubkey)
     let epochDuty = map.getOrDefault(epoch, DefaultDutyAndProof)
     if not(epochDuty.isDefault()):
@@ -121,6 +119,9 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch) {.async.} =
                prior_dependent_root = epochDuty.dependentRoot,
                dependent_root = dependentRoot
           alreadyWarned = true
+    else:
+      info "Received new attester duty", duty, epoch = epoch,
+                                         dependent_root = dependentRoot
     map[epoch] = dutyAndProof
     vc.attesters[duty.pubkey] = map
 
@@ -235,8 +236,8 @@ proc pollForBeaconProposers*(vc: ValidatorClientRef) {.async.} =
             proposers_count = len(initialProposers)
 
     # Notify the `BlockServiceRef` for any proposals that we have in our cache.
-    # await vc.notifyBlockProductionService(currentSlot,
-    #                                       initialProposers.toList())
+    await vc.notifyBlockProductionService(currentSlot,
+                                          initialProposers.toList())
 
     if vc.attachedValidators.count() != 0:
       # Only download duties and notify `BlockServiceRef` if we have some
@@ -270,8 +271,9 @@ proc pollForBeaconProposers*(vc: ValidatorClientRef) {.async.} =
         info "Additional block proposers detected", slot = currentSlot,
               validators_count = vc.attachedValidators.count(),
               proposers_count = len(additionalProposers)
-      # await vc.notifyBlockProductionService(currentSlot,
-      #                                       additionalProposers.toList())
+
+      await vc.notifyBlockProductionService(currentSlot,
+                                            additionalProposers.toList())
 
 proc waitForNextSlot(service: DutiesServiceRef,
                      serviceLoop: DutiesServiceLoop) {.async.} =

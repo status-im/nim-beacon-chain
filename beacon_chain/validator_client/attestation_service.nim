@@ -19,7 +19,6 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
   doAssert(MAX_VALIDATORS_PER_COMMITTEE <= uint64(high(int)))
   let vc = service.client
   let ad = await vc.produceAttestationData(slot, committee_index)
-  debug "Produced attestation data", attestation_data = ad, epoch = slot.epoch()
   let attestations =
     block:
       var res: seq[Attestation]
@@ -59,9 +58,6 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
         let attestation = await validator.produceAndSignAttestation(ad,
           int(duty.committee_length), Natural(duty.validator_committee_index),
           vc.fork.get(), vc.beaconGenesis.genesis_validators_root)
-
-        debug "Attestation's aggregation_bits",
-              length = lenu64(attestation.aggregation_bits)
 
         res.add(attestation)
       res

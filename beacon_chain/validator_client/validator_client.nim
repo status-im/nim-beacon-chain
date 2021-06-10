@@ -142,7 +142,8 @@ proc onSlotStart(vc: ValidatorClientRef, wallTime: BeaconTime,
   info "Slot start",
     lastSlot = shortLog(lastSlot),
     wallSlot = shortLog(wallSlot.slot),
-    delay = shortLog(delay)
+    delay = shortLog(delay),
+    attestationIn = vc.getDurationToNextAttestation(wallSlot.slot)
 
 proc asyncRun*(vc: ValidatorClientRef) {.async.} =
   vc.fallbackService.start()
@@ -192,7 +193,7 @@ programMain:
                        else:
                          defaultGraffitiBytes(),
         nodesAvailable: newAsyncEvent(),
-        blocksQueue: newAsyncQueue[BlockServiceEventRef](1)
+        blocksQueue: newAsyncQueue[BlockServiceEventRef]()
       )
 
       waitFor asyncInit(vc)
