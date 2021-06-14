@@ -7,7 +7,7 @@ proc checkNodes*(service: FallbackServiceRef) {.async.} =
     block:
       var res: seq[BeaconNodeServerRef]
       for item in service.client.beaconNodes:
-        if item.status != BeaconNodeStatus.Online:
+        if item.status != RestBeaconNodeStatus.Online:
           res.add(item)
       res
   let pendingChecks =

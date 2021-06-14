@@ -23,7 +23,7 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
     block:
       var res: seq[Attestation]
       for duty in duties:
-        debug "Serving duty", duty = duty, epoch = slot.epoch()
+        debug "Serving attestation duty", duty = duty, epoch = slot.epoch()
         if (duty.slot != ad.slot) or
            (uint64(duty.committee_index) != ad.index):
           error "Inconsistent validator duties during attestation signing",

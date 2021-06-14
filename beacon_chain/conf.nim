@@ -559,13 +559,7 @@ type
 
       beaconNodes* {.
         desc: "URL addresses to one or more beacon node HTTP REST APIs",
-        name: "beacon-nodes" }: seq[string]
-
-      retryDelay* {.
-        defaultValue: 10
-        desc: "Delay in seconds between retries after unsuccessful " &
-              "attempts to connect to a beacon node [=10]"
-        name: "retry-delay" }: int
+        name: "beacon-node" }: seq[string]
 
 proc defaultDataDir*(config: BeaconNodeConf|ValidatorClientConf): string =
   let dataDir = when defined(windows):

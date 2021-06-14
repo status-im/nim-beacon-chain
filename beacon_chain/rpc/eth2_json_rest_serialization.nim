@@ -134,10 +134,6 @@ type
     message*: string
     stacktraces*: Option[string]
 
-  RestAttestationFailure* = object
-    index*: uint64
-    message*: string
-
   RestAttestationError* = object
     code*: uint64
     message*: string
@@ -163,7 +159,8 @@ type
   DataRestVersion* = DataEnclosedObject[RestVersion]
   DataRestConfig* = DataEnclosedObject[RestConfig]
 
-  EncodeTypes* = SignedBeaconBlock | seq[RestCommitteeSubscription]
+  EncodeDataTypes* = seq[RestCommitteeSubscription]
+  EncodeTypes* = SignedBeaconBlock
   EncodeArrays* = seq[ValidatorIndex] | seq[Attestation] |
                   seq[SignedAggregateAndProof]
   DecodeTypes* = DataRestBeaconGenesis | DataRestFork | DataRestProposerDuties |
@@ -548,8 +545,8 @@ RestJson.useCustomSerialization(BeaconState.justification_bits):
   write:
     writer.writeValue "0x" & toHex([value])
 
-proc encodeBytes*[T: EncodeTypes](value: T,
-                                  contentType: string): RestResult[seq[byte]] =
+proc encodeBytes*[T: EncodeDataTypes](value: T,
+                                   contentType: string): RestResult[seq[byte]] =
   case contentType
   of "application/json":
     var stream = memoryOutput()
@@ -557,6 +554,17 @@ proc encodeBytes*[T: EncodeTypes](value: T,
     writer.beginRecord()
     writer.writeField("data", value)
     writer.endRecord()
+    ok(stream.getOutput(seq[byte]))
+  else:
+    err("Content-Type not supported")
+
+proc encodeBytes*[T: EncodeTypes](value: T,
+                                   contentType: string): RestResult[seq[byte]] =
+  case contentType
+  of "application/json":
+    var stream = memoryOutput()
+    var writer = JsonWriter[RestJson].init(stream)
+    writer.writeValue(value)
     ok(stream.getOutput(seq[byte]))
   else:
     err("Content-Type not supported")

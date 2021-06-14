@@ -164,13 +164,14 @@ proc getBlockProposers*(vc: ValidatorClientRef,
   var hashset = initHashSet[ValidatorPubKey]()
   let data = vc.proposers.getOrDefault(slot.epoch())
   if not(data.isDefault()):
-    for item in data.data:
-      if (item.slot == slot) and (item.pubkey in vc.attachedValidators):
+    for item in data.duties:
+      if (item.slot == slot) and (item.pubkey in vc.attachedValidators) and
+         (item.pubkey notin hashset):
         hashset.incl(item.pubkey)
   hashset
 
 proc toList*(s: HashSet[ValidatorPubKey]): seq[ValidatorPubKey] =
-  var res = newSeq[ValidatorPubKey](len(s))
+  var res = newSeqOfCap[ValidatorPubKey](len(s))
   for item in s.items():
     res.add(item)
   res
@@ -234,10 +235,10 @@ proc pollForBeaconProposers*(vc: ValidatorClientRef) {.async.} =
       info "Block proposers detected", slot = currentSlot,
             validators_count = vc.attachedValidators.count(),
             proposers_count = len(initialProposers)
-
-    # Notify the `BlockServiceRef` for any proposals that we have in our cache.
-    await vc.notifyBlockProductionService(currentSlot,
-                                          initialProposers.toList())
+      # Notify the `BlockServiceRef` for any proposals that we have in our
+      # cache.
+      await vc.notifyBlockProductionService(currentSlot,
+                                            initialProposers.toList())
 
     if vc.attachedValidators.count() != 0:
       # Only download duties and notify `BlockServiceRef` if we have some
@@ -272,8 +273,8 @@ proc pollForBeaconProposers*(vc: ValidatorClientRef) {.async.} =
               validators_count = vc.attachedValidators.count(),
               proposers_count = len(additionalProposers)
 
-      await vc.notifyBlockProductionService(currentSlot,
-                                            additionalProposers.toList())
+        await vc.notifyBlockProductionService(currentSlot,
+                                              additionalProposers.toList())
 
 proc waitForNextSlot(service: DutiesServiceRef,
                      serviceLoop: DutiesServiceLoop) {.async.} =

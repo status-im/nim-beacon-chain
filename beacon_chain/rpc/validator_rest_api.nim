@@ -396,7 +396,7 @@ proc getAttesterDuties*(epoch: Epoch,
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/getAttesterDuties
 
 proc produceBlock*(slot: Slot, randao_reveal: ValidatorSig,
-                   graffiti: Option[GraffitiBytes]
+                   graffiti: GraffitiBytes
                   ): RestResponse[DataRestBeaconBlock] {.
      rest, endpoint: "/api/eth/v1/validator/blocks/{slot}",
      meth: MethodGet.}
@@ -426,3 +426,4 @@ proc prepareBeaconCommitteeSubnet*(body: seq[RestCommitteeSubscription]
      rest, endpoint: "/api/eth/v1/validator/beacon_committee_subscriptions",
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/prepareBeaconCommitteeSubnet
+

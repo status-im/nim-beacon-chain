@@ -63,7 +63,7 @@ type
   ProposedData* = object
     epoch*: Epoch
     dependentRoot*: Eth2Digest
-    data*: seq[RestProposerDuty]
+    duties*: seq[RestProposerDuty]
 
   BeaconNodeServer* = object
     client*: RestClientRef
@@ -72,9 +72,9 @@ type
     ident*: Option[string]
     genesis*: Option[RestBeaconGenesis]
     syncInfo*: Option[RestSyncInfo]
-    status*: BeaconNodeStatus
+    status*: RestBeaconNodeStatus
 
-  BeaconNodeStatus* {.pure.} = enum
+  RestBeaconNodeStatus* {.pure.} = enum
     Uninitalized, Offline, Incompatible, NotSynced, Online
 
   BeaconNodeServerRef* = ref BeaconNodeServer
@@ -145,7 +145,7 @@ proc init*(t: typedesc[DutyAndProof], epoch: Epoch, dependentRoot: Eth2Digest,
 
 proc init*(t: typedesc[ProposedData], epoch: Epoch, dependentRoot: Eth2Digest,
            data: openarray[RestProposerDuty]): ProposedData =
-  ProposedData(epoch: epoch, dependentRoot: dependentRoot, data: @data)
+  ProposedData(epoch: epoch, dependentRoot: dependentRoot, duties: @data)
 
 proc getCurrentSlot*(vc: ValidatorClientRef): Option[Slot] =
   let

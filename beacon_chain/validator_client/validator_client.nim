@@ -139,6 +139,8 @@ proc onSlotStart(vc: ValidatorClientRef, wallTime: BeaconTime,
     expectedSlot = lastSlot + 1
     delay = wallTime - expectedSlot.toBeaconTime()
 
+  checkIfShouldStopAtEpoch(wallSlot.slot, vc.config.stopAtEpoch)
+
   info "Slot start",
     lastSlot = shortLog(lastSlot),
     wallSlot = shortLog(wallSlot.slot),

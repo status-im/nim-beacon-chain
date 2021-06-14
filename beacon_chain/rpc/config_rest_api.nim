@@ -19,7 +19,7 @@ logScope: topics = "rest_config"
 
 func getDepositAddress(node: BeaconNode): string =
   if isNil(node.eth1Monitor):
-    ""
+    "0x0000000000000000000000000000000000000000"
   else:
     $node.eth1Monitor.depositContractAddress
 

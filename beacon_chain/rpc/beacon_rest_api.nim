@@ -943,7 +943,7 @@ proc getStateFork*(state_id: StateIdent): RestResponse[DataRestFork] {.
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateFork
 
-proc publishBlock*(body: SignedBeaconBlock): RestStatus {.
+proc publishBlock*(body: SignedBeaconBlock): RestPlainResponse {.
      rest, endpoint: "/eth/v1/beacon/blocks",
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/publishBlock

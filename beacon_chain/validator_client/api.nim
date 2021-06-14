@@ -10,17 +10,17 @@ proc checkCompatible*(vc: ValidatorClientRef,
       res.data.data
     except CancelledError as exc:
       error "Configuration request was interrupted"
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       raise exc
     except RestError as exc:
       error "Unable to obtain beacon node's configuration",
             error_name = exc.name, error_message = exc.msg
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       return
     except CatchableError as exc:
       error "Unexpected exception", error_name = exc.name,
             error_message = exc.msg
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       return
 
   let genesis =
@@ -30,17 +30,17 @@ proc checkCompatible*(vc: ValidatorClientRef,
       res.data.data
     except CancelledError as exc:
       error "Genesis request was interrupted"
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       raise exc
     except RestError as exc:
       error "Unable to obtain beacon node's genesis",
             error_name = exc.name, error_message = exc.msg
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       return
     except CatchableError as exc:
       error "Unexpected exception", error_name = exc.name,
             error_message = exc.msg
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       return
 
   let genesisFlag = (genesis != vc.beaconGenesis)
@@ -60,14 +60,14 @@ proc checkCompatible*(vc: ValidatorClientRef,
     info.MAX_VOLUNTARY_EXITS != MAX_VOLUNTARY_EXITS
 
   if configFlag or genesisFlag:
-    node.status = BeaconNodeStatus.Incompatible
+    node.status = RestBeaconNodeStatus.Incompatible
     warn "Beacon node has incompatible configuration",
           genesis_flag = genesisFlag, config_flag = configFlag
   else:
     info "Beacon node has compatible configuration"
     node.config = some(info)
     node.genesis = some(genesis)
-    node.status = BeaconNodeStatus.Online
+    node.status = RestBeaconNodeStatus.Online
 
 proc checkSync*(vc: ValidatorClientRef,
                 node: BeaconNodeServerRef) {.async.} =
@@ -79,28 +79,28 @@ proc checkSync*(vc: ValidatorClientRef,
       res.data.data
     except CancelledError as exc:
       error "Sync status request was interrupted"
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       raise exc
     except RestError as exc:
       error "Unable to obtain beacon node's sync status",
             error_name = exc.name, error_message = exc.msg
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       return
     except CatchableError as exc:
       error "Unexpected exception", error_name = exc.name,
             error_message = exc.msg
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       return
   node.syncInfo = some(syncInfo)
   node.status =
     if not(syncInfo.is_syncing) or (syncInfo.sync_distance < SYNC_TOLERANCE):
       info "Beacon node is in sync", sync_distance = syncInfo.sync_distance,
            head_slot = syncInfo.head_slot
-      BeaconNodeStatus.Online
+      RestBeaconNodeStatus.Online
     else:
       warn "Beacon node not in sync", sync_distance = syncInfo.sync_distance,
            head_slot = syncInfo.head_slot
-      BeaconNodeStatus.NotSynced
+      RestBeaconNodeStatus.NotSynced
 
 proc checkOnline*(node: BeaconNodeServerRef) {.async.} =
   logScope: endpoint = node
@@ -111,30 +111,30 @@ proc checkOnline*(node: BeaconNodeServerRef) {.async.} =
       res.data.data
     except CancelledError as exc:
       error "Status request was interrupted"
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       raise exc
     except RestError as exc:
       error "Unable to check beacon node's status",
             error_name = exc.name, error_message = exc.msg
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       return
     except CatchableError as exc:
       error "Unexpected exception", error_name = exc.name,
             error_message = exc.msg
-      node.status = BeaconNodeStatus.Offline
+      node.status = RestBeaconNodeStatus.Offline
       return
   debug "Beacon node has been identified", agent = agent.version
   node.ident = some(agent.version)
-  node.status = BeaconNodeStatus.Online
+  node.status = RestBeaconNodeStatus.Online
 
 proc checkNode*(vc: ValidatorClientRef,
                 node: BeaconNodeServerRef) {.async.} =
   debug "Checking beacon node", endpoint = node
   await node.checkOnline()
-  if node.status != BeaconNodeStatus.Online:
+  if node.status != RestBeaconNodeStatus.Online:
     return
   await vc.checkCompatible(node)
-  if node.status != BeaconNodeStatus.Online:
+  if node.status != RestBeaconNodeStatus.Online:
     return
   await vc.checkSync(node)
 
@@ -149,7 +149,7 @@ template untilSuccess*(vc: ValidatorClientRef, body: untyped,
 
     for node {.inject.} in vc.beaconNodes:
       case node.status
-      of BeaconNodeStatus.Online:
+      of RestBeaconNodeStatus.Online:
         it = node.client
         let optresp =
           try:
@@ -157,19 +157,19 @@ template untilSuccess*(vc: ValidatorClientRef, body: untyped,
             some(res)
           except CancelledError as exc:
             debug "Received interrupt", endpoint = node
-            node.status = BeaconNodeStatus.Offline
+            node.status = RestBeaconNodeStatus.Offline
             raise exc
           except RestError as exc:
             var m {.used.} = exc
             debug "Communication error", error_name = exc.name,
                   error_msg = exc.msg, endpoint = node
-            node.status = BeaconNodeStatus.Offline
+            node.status = RestBeaconNodeStatus.Offline
             none[ResType]()
           except CatchableError as exc:
             var m {.used.} = exc
             debug "Unexpected exception", error_name = exc.name,
                   error_msg = exc.msg, endpoint = node
-            node.status = BeaconNodeStatus.Offline
+            node.status = RestBeaconNodeStatus.Offline
             raiseAssert "Error happens"
             # none[ResType]()
 
@@ -178,20 +178,20 @@ template untilSuccess*(vc: ValidatorClientRef, body: untyped,
           let status = handlers
           debug "Handler returned status", status = status
           case status
-            of BeaconNodeStatus.Uninitalized, BeaconNodeStatus.Offline:
+            of RestBeaconNodeStatus.Uninitalized, RestBeaconNodeStatus.Offline:
               retryErrorNodes.add(node)
-            of BeaconNodeStatus.NotSynced:
+            of RestBeaconNodeStatus.NotSynced:
               retryNonsyncNodes.add(node)
-            of BeaconNodeStatus.Incompatible, BeaconNodeStatus.Online:
+            of RestBeaconNodeStatus.Incompatible, RestBeaconNodeStatus.Online:
               discard
           node.status = status
         else:
           retryErrorNodes.add(node)
-      of BeaconNodeStatus.Uninitalized, BeaconNodeStatus.Offline:
+      of RestBeaconNodeStatus.Uninitalized, RestBeaconNodeStatus.Offline:
         retryErrorNodes.add(node)
-      of BeaconNodeStatus.NotSynced:
+      of RestBeaconNodeStatus.NotSynced:
         retryNonsyncNodes.add(node)
-      of BeaconNodeStatus.Incompatible:
+      of RestBeaconNodeStatus.Incompatible:
         # We are not going to repeat requests to incompatible beacon node.
         discard
 
@@ -204,7 +204,7 @@ template untilSuccess*(vc: ValidatorClientRef, body: untyped,
         await vc.checkNode(item)
       except CancelledError as exc:
         debug "Received interrupt", endpoint = item
-        item.status = BeaconNodeStatus.Offline
+        item.status = RestBeaconNodeStatus.Offline
         raise exc
 
     await sleepAsync(1.seconds)
@@ -221,19 +221,19 @@ proc getProposerDuties*(vc: ValidatorClientRef,
     of 400:
       debug "Received invalid request response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 503:
       debug "Received not synced error response",
             response_code = 503, endpoint = node
-      BeaconNodeStatus.NotSynced
+      RestBeaconNodeStatus.NotSynced
     else:
       debug "Received unexpected error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
 
 proc getAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch,
                         validators: seq[ValidatorIndex]
@@ -247,19 +247,19 @@ proc getAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch,
     of 400:
       debug "Received invalid request response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 503:
       debug "Received not synced error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.NotSynced
+      RestBeaconNodeStatus.NotSynced
     else:
       debug "Received unexpected error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
 
 proc getHeadStateFork*(vc: ValidatorClientRef): Future[Fork] {.async.} =
   logScope: request = "getHeadStateFork"
@@ -272,15 +272,15 @@ proc getHeadStateFork*(vc: ValidatorClientRef): Future[Fork] {.async.} =
     of 400, 404:
       debug "Received invalid request response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     else:
       debug "Received unexpected error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
 
 proc getValidators*(vc: ValidatorClientRef,
                     id: seq[ValidatorIdent]): Future[seq[RestValidator]] {.
@@ -295,15 +295,15 @@ proc getValidators*(vc: ValidatorClientRef,
     of 400, 404:
       debug "Received invalid request response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     else:
       debug "Received unexpected error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
 
 proc produceAttestationData*(vc: ValidatorClientRef,  slot: Slot,
                              committee_index: CommitteeIndex
@@ -317,19 +317,19 @@ proc produceAttestationData*(vc: ValidatorClientRef,  slot: Slot,
     of 400:
       debug "Received invalid request response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 503:
       debug "Received not synced error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.NotSynced
+      RestBeaconNodeStatus.NotSynced
     else:
       debug "Received unexpected error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
 
 proc getAttestationErrorMessage(response: RestPlainResponse): string =
   let res = decodeBytes(RestAttestationError, response.data,
@@ -339,6 +339,18 @@ proc getAttestationErrorMessage(response: RestPlainResponse): string =
     let failures = errorObj.failures.mapIt(Base10.toString(it.index) & ": " &
                                            it.message)
     errorObj.message & ": [" & failures.join(", ") & "]"
+  else:
+    "Unable to decode error response: [" & $res.error() & "]"
+
+proc getGenericErrorMessage(response: RestPlainResponse): string =
+  let res = decodeBytes(RestGenericError, response.data,
+                        response.contentType)
+  if res.isOk():
+    let errorObj = res.get()
+    if errorObj.stacktraces.isSome():
+      errorObj.message & ": [" & errorObj.stacktraces.get() & "]"
+    else:
+      errorObj.message
   else:
     "Unable to decode error response: [" & $res.error() & "]"
 
@@ -355,17 +367,17 @@ proc submitPoolAttestations*(vc: ValidatorClientRef,
       debug "Received invalid request response",
             response_code = response.status, endpoint = node,
             response_error = response.getAttestationErrorMessage()
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node,
             response_error = response.getAttestationErrorMessage()
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     else:
       debug "Received unexpected error response",
             response_code = response.status, endpoint = node,
             response_error = response.getAttestationErrorMessage()
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
 
 proc getAggregatedAttestation*(vc: ValidatorClientRef, slot: Slot,
                                root: Eth2Digest): Future[Attestation] {.
@@ -379,15 +391,15 @@ proc getAggregatedAttestation*(vc: ValidatorClientRef, slot: Slot,
     of 400:
       debug "Received invalid request response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     else:
       debug "Received unexpected error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
 
 proc publishAggregateAndProofs*(vc: ValidatorClientRef,
                             data: seq[SignedAggregateAndProof]): Future[bool] {.
@@ -400,13 +412,75 @@ proc publishAggregateAndProofs*(vc: ValidatorClientRef,
       return true
     of 400:
       debug "Received invalid request response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.Offline
+    of 500:
+      debug "Received internal error response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.Offline
+    else:
+      debug "Received unexpected error response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.Offline
+
+proc produceBlock*(vc: ValidatorClientRef, slot: Slot,
+                   randao_reveal: ValidatorSig,
+                   graffiti: GraffitiBytes): Future[BeaconBlock] {.
+     async.} =
+  logScope: request = "produceBlock"
+  vc.untilSuccess(await produceBlock(it, slot, randao_reveal, graffiti)):
+    case response.status:
+    of 200:
+      debug "Received successfull response", endpoint = node
+      return response.data.data
+    of 400:
+      debug "Received invalid request response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
+    of 503:
+      debug "Received not synced error response",
+            response_code = response.status, endpoint = node
+      RestBeaconNodeStatus.NotSynced
     else:
       debug "Received unexpected error response",
             response_code = response.status, endpoint = node
-      BeaconNodeStatus.Offline
+      RestBeaconNodeStatus.Offline
+
+proc publishBlock*(vc: ValidatorClientRef,
+                   data: SignedBeaconBlock): Future[bool] {.async.} =
+  logScope: request = "produceBlock"
+  vc.untilSuccess(await publishBlock(it, data)):
+    case response.status:
+    of 200:
+      debug "Block was successfully published", endpoint = node
+      return true
+    of 202:
+      debug "Block not passed validation, but still published", endpoint = node
+      return true
+    of 400:
+      debug "Received invalid request response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.Offline
+    of 500:
+      debug "Received internal error response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.Offline
+    of 503:
+      debug "Received not synced error response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.NotSynced
+    else:
+      debug "Received unexpected error response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.Offline
