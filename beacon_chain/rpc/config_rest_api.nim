@@ -184,6 +184,5 @@ proc installConfigApiHandlers*(router: var RestRouter, node: BeaconNode) =
   )
 
 proc getConfig*(): RestResponse[DataRestConfig] {.
-     rest, endpoint: "/api/eth/v1/config/spec",
-     meth: MethodGet.}
+     rest, endpoint: "/eth/v1/config/spec", meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Config/getSpec

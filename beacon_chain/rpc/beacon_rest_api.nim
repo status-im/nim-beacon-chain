@@ -934,17 +934,17 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
   )
 
 proc getBeaconGenesis*(): RestResponse[DataRestBeaconGenesis] {.
-     rest, endpoint: "/api/eth/v1/beacon/genesis",
+     rest, endpoint: "/eth/v1/beacon/genesis",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getGenesis
 
 proc getStateFork*(state_id: StateIdent): RestResponse[DataRestFork] {.
-     rest, endpoint: "/api/eth/v1/beacon/states/{state_id}/fork",
+     rest, endpoint: "/eth/v1/beacon/states/{state_id}/fork",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateFork
 
 proc publishBlock*(body: SignedBeaconBlock): RestPlainResponse {.
-     rest, endpoint: "/eth/v1/beacon/blocks",
+     rest, endpoint: "/v1/beacon/blocks",
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/publishBlock
 
@@ -952,19 +952,18 @@ proc getStateValidator*(state_id: StateIdent,
                         validator_id: ValidatorIdent
                        ): RestResponse[DataRestValidator] {.
      rest,
-     endpoint: "/api/eth/v1/beacon/states/{state_id}/validators/{validator_id}",
+     endpoint: "/eth/v1/beacon/states/{state_id}/validators/{validator_id}",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateValidator
 
 proc getStateValidators*(state_id: StateIdent,
                          id: seq[ValidatorIdent]
                         ): RestResponse[DataRestValidatorList] {.
-     rest,
-     endpoint: "/api/eth/v1/beacon/states/{state_id}/validators",
+     rest, endpoint: "/eth/v1/beacon/states/{state_id}/validators",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateValidators
 
 proc submitPoolAttestations*(body: seq[Attestation]): RestPlainResponse {.
-     rest, endpoint: "/api/eth/v1/beacon/pool/attestations",
+     rest, endpoint: "/eth/v1/beacon/pool/attestations",
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/submitPoolAttestations

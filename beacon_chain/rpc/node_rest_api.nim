@@ -293,11 +293,11 @@ proc installNodeApiHandlers*(router: var RestRouter, node: BeaconNode) =
   )
 
 proc getSyncingStatus*(): RestResponse[DataRestSyncInfo] {.
-     rest, endpoint: "/api/eth/v1/node/syncing",
+     rest, endpoint: "/eth/v1/node/syncing",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Node/getSyncingStatus
 
 proc getVersion*(): RestResponse[DataRestVersion] {.
-     rest, endpoint: "/api/eth/v1/node/version",
+     rest, endpoint: "/eth/v1/node/version",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Node/getNodeVersion

@@ -384,46 +384,45 @@ proc installValidatorApiHandlers*(router: var RestRouter, node: BeaconNode) =
   )
 
 proc getProposerDuties*(epoch: Epoch): RestResponse[DataRestProposerDuties] {.
-     rest, endpoint: "/api/eth/v1/validator/duties/proposer/{epoch}",
+     rest, endpoint: "/eth/v1/validator/duties/proposer/{epoch}",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/getProposerDuties
 
 proc getAttesterDuties*(epoch: Epoch,
                         body: seq[ValidatorIndex]
                        ): RestResponse[DataRestAttesterDuties] {.
-     rest, endpoint: "/api/eth/v1/validator/duties/attester/{epoch}",
+     rest, endpoint: "/eth/v1/validator/duties/attester/{epoch}",
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/getAttesterDuties
 
 proc produceBlock*(slot: Slot, randao_reveal: ValidatorSig,
                    graffiti: GraffitiBytes
                   ): RestResponse[DataRestBeaconBlock] {.
-     rest, endpoint: "/api/eth/v1/validator/blocks/{slot}",
+     rest, endpoint: "/eth/v1/validator/blocks/{slot}",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/produceBlock
 
 proc produceAttestationData*(slot: Slot,
                              committee_index: CommitteeIndex
                             ): RestResponse[DataRestAttestationData] {.
-     rest, endpoint: "/api/eth/v1/validator/attestation_data",
+     rest, endpoint: "/eth/v1/validator/attestation_data",
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/produceAttestationData
 
 proc getAggregatedAttestation*(attestation_data_root: Eth2Digest,
                                slot: Slot): RestResponse[DataRestAttestation] {.
-     rest, endpoint: "/api/eth/v1/validator/aggregate_attestation"
+     rest, endpoint: "/eth/v1/validator/aggregate_attestation"
      meth: MethodGet.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/getAggregatedAttestation
 
 proc publishAggregateAndProofs*(body: seq[SignedAggregateAndProof]
                                ): RestPlainResponse {.
-     rest, endpoint: "/api/eth/v1/validator/aggregate_and_proofs",
+     rest, endpoint: "/eth/v1/validator/aggregate_and_proofs",
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/publishAggregateAndProofs
 
 proc prepareBeaconCommitteeSubnet*(body: seq[RestCommitteeSubscription]
                                   ): RestPlainResponse {.
-     rest, endpoint: "/api/eth/v1/validator/beacon_committee_subscriptions",
+     rest, endpoint: "/eth/v1/validator/beacon_committee_subscriptions",
      meth: MethodPost.}
   ## https://ethereum.github.io/eth2.0-APIs/#/Validator/prepareBeaconCommitteeSubnet
-
