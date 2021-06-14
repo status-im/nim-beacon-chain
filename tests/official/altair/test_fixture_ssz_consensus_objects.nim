@@ -16,7 +16,7 @@ import
   # Beacon chain internals
   ../../beacon_chain/spec/[crypto, digest],
   ../../beacon_chain/spec/datatypes/altair,
-  ../../beacon_chain/ssz,
+  ../../beacon_chain/ssz/spec_types,
   # Status libraries
   snappy,
   # Test utilities

@@ -8,10 +8,11 @@
 {.push raises: [Defect].}
 
 import
-  os, strformat, chronicles,
-  ./ssz_serialization,
+  std/[os, strformat],
+  chronicles, ssz_serialization/ssz,
   ../spec/[crypto, datatypes, digest],
-  ../consensus_object_pools/block_pools_types
+  ../consensus_object_pools/block_pools_types,
+  ./spec_types
 
 # Dump errors are generally not fatal where used currently - the code calling
 # these functions, like most code, is not exception safe

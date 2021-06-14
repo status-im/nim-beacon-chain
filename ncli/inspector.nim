@@ -20,8 +20,9 @@ import nimcrypto/[hash, keccak]
 import secp256k1 as s
 import stint
 import snappy
+import ssz_serialization/ssz
 import ../beacon_chain/spec/[crypto, datatypes, network, digest]
-import ../beacon_chain/ssz/ssz_serialization
+import ../beacon_chain/ssz/spec_types
 
 const
   InspectorName* = "Beacon-Chain Network Inspector"

@@ -9,12 +9,12 @@
 
 import
   os, sequtils, strutils, options, json, terminal,
-  chronos, chronicles, confutils, stint, json_serialization,
+  chronos, chronicles, confutils, stint, json_serialization, ssz_serialization,
   ../filepath,
   ../networking/network_metadata,
   web3, web3/confutils_defs, eth/keys, eth/p2p/discoveryv5/random2,
   stew/io2,
-  ../spec/[datatypes, crypto, presets], ../ssz/merkleization,
+  ../spec/[datatypes, crypto, presets], ../ssz/spec_types,
   ../validators/keystore_management
 
 # Compiled version of /scripts/depositContract.v.py in this repo

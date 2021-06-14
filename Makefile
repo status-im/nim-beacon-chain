@@ -160,7 +160,6 @@ XML_TEST_BINARIES := \
 TEST_BINARIES := \
 	proto_array \
 	fork_choice \
-	test_ssz_roundtrip \
 	state_sim \
 	block_sim
 .PHONY: $(TEST_BINARIES) $(XML_TEST_BINARIES)
@@ -226,15 +225,6 @@ fork_choice: | build deps
 		echo -e $(BUILD_END_MSG) "build/$@"
 
 all_tests: | build deps
-	+ echo -e $(BUILD_MSG) "build/$@" && \
-		MAKE="$(MAKE)" V="$(V)" $(ENV_SCRIPT) scripts/compile_nim_program.sh \
-			$@ \
-			"tests/$@.nim" \
-			$(NIM_PARAMS) -d:chronicles_log_level=TRACE -d:const_preset=mainnet -d:chronicles_sinks="json[file]" && \
-		echo -e $(BUILD_END_MSG) "build/$@"
-
-# TODO `test_ssz_roundtrip` is extracted from the rest of the tests because it's incompatible with unittest2
-test_ssz_roundtrip: | build deps
 	+ echo -e $(BUILD_MSG) "build/$@" && \
 		MAKE="$(MAKE)" V="$(V)" $(ENV_SCRIPT) scripts/compile_nim_program.sh \
 			$@ \

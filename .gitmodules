@@ -214,3 +214,8 @@
 	ignore = untracked
 	branch = master
 
+[submodule "vendor/nim-ssz-serialization"]
+	path = vendor/nim-ssz-serialization
+	url = https://github.com/status-im/nim-ssz-serialization.git
+	ignore = untracked
+	branch = master

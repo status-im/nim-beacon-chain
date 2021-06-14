@@ -17,7 +17,7 @@
 import
   math, stats, times, strformat,
   options, random, tables, os,
-  confutils, chronicles, eth/db/kvstore_sqlite3,
+  confutils, chronicles, eth/db/kvstore_sqlite3, ssz_serialization,
   eth/keys,
   ../tests/testblockutil,
   ../beacon_chain/spec/[beaconstate, crypto, datatypes, digest,
@@ -28,7 +28,6 @@ import
   ../beacon_chain/validators/validator_pool,
   ../beacon_chain/consensus_object_pools/[blockchain_dag, block_quarantine,
                                           block_clearance, attestation_pool],
-  ../beacon_chain/ssz/[merkleization, ssz_serialization],
   ./simutils
 
 type Timers = enum

@@ -21,8 +21,8 @@
 
 import
   std/[algorithm, intsets, options, sequtils, sets, tables],
-  chronicles,
-  ../extras, ../ssz/merkleization, metrics,
+  chronicles, ssz_serialization,
+  ../extras, metrics,
   ./beaconstate, ./crypto, ./datatypes/[phase0, altair], ./digest, ./helpers,
   ./validator, ./signatures, ./presets,
   ../../nbench/bench_lab

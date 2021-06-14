@@ -12,7 +12,6 @@ import
   blscurve,
   stew/[byteutils, results],
   # Internal
-  ../ssz/merkleization,
   "."/[
     crypto, datatypes, helpers, presets, beaconstate, digest,
     forkedbeaconstate_helpers]

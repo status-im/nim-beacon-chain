@@ -8,9 +8,9 @@
 {.used.}
 
 import
-  unittest2,
+  unittest2, ssz_serialization,
   ../beacon_chain/spec/[datatypes, crypto],
-  ../beacon_chain/ssz
+  ../beacon_chain/ssz/spec_types
 
 # Sanity checks to make sure all the workarounds introduced
 # to deal with https://github.com/status-im/nimbus-eth2/issues/374

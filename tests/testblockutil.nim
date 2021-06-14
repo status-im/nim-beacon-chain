@@ -7,10 +7,10 @@
 
 import
   chronicles,
-  options, stew/endians2,
+  options, stew/endians2, ssz_serialization,
   ../beacon_chain/[beacon_node_types, extras],
   ../beacon_chain/validators/validator_pool,
-  ../beacon_chain/ssz/merkleization,
+  ../beacon_chain/ssz/spec_types,
   ../beacon_chain/spec/[crypto, datatypes, digest, presets, helpers,
                         signatures, state_transition, forkedbeaconstate_helpers],
   ../beacon_chain/consensus_object_pools/attestation_pool

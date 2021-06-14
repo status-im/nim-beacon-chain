@@ -20,7 +20,6 @@ import
   ../consensus_object_pools/blockchain_dag,
   ../spec/[crypto, datatypes, digest, forkedbeaconstate_helpers, network],
   ../spec/eth2_apis/callsigs_types,
-  ../ssz/merkleization,
   ./rpc_utils, ./eth2_json_rpc_serialization
 
 logScope: topics = "beaconapi"

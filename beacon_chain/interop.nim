@@ -8,8 +8,8 @@
 {.push raises: [Defect].}
 
 import
-  stew/endians2, stint,
-  ./extras, ./ssz/merkleization,
+  stew/endians2, stint, ssz_serialization,
+  ./extras,
   spec/[crypto, datatypes, digest, keystore, signatures]
 
 func get_eth1data_stub*(deposit_count: uint64, current_epoch: Epoch): Eth1Data =

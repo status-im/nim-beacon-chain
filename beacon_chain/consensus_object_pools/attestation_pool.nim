@@ -11,13 +11,12 @@ import
   # Standard libraries
   std/[options, tables, sequtils],
   # Status libraries
-  metrics,
+  metrics, ssz_serialization,
   chronicles, stew/byteutils, json_serialization/std/sets as jsonSets,
   # Internal
   ../spec/[
     beaconstate, datatypes, crypto, digest, forkedbeaconstate_helpers,
     validator],
-  ../ssz/merkleization,
   "."/[spec_cache, blockchain_dag, block_quarantine],
   ".."/[beacon_clock, beacon_node_types, extras],
   ../fork_choice/fork_choice

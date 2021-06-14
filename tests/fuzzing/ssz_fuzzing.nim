@@ -1,10 +1,11 @@
 import
   testutils/fuzzing, faststreams/inputs, serialization/testing/tracing,
-  ../../beacon_chain/ssz,
+  ssz_serialization,
+  ../../beacon_chain/ssz/spec_types,
   ../../beacon_chain/spec/[datatypes, crypto, digest, datatypes]
 
 export
-  ssz, datatypes, crypto, digest, fuzzing
+  ssz_serialization, datatypes, crypto, digest, fuzzing, spec_types
 
 template sszFuzzingTest*(T: type) =
   test:

@@ -15,9 +15,9 @@ import
   eth/db/[kvstore, kvstore_sqlite3],
   chronicles,
   sqlite3_abi,
+  ssz_serialization,
   # Internal
   ../spec/[datatypes, digest, crypto, helpers],
-  ../ssz,
   ./slashing_protection_common
 
 # Requirements

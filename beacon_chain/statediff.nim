@@ -9,7 +9,6 @@
 
 import
   stew/assign2,
-  ./ssz/types,
   ./spec/[crypto, datatypes, digest, helpers]
 
 func diffModIncEpoch[T, U](hl: HashArray[U, T], startSlot: uint64):

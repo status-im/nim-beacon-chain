@@ -18,7 +18,6 @@ import
   # Specs
   ../../beacon_chain/spec/[beaconstate, datatypes, crypto, presets],
   # Internals
-  ../../beacon_chain/ssz,
   ../../beacon_chain/extras,
   # Mock helpers
   ../mocking/[mock_deposits, mock_genesis],

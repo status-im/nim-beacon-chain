@@ -10,7 +10,9 @@
 
 import
   # Standard library
-  math,
+  std/math,
+
+  ssz_serialization,
 
   # Specs
   ../../beacon_chain/spec/[datatypes, crypto, digest,
@@ -18,7 +20,6 @@ import
 
   # Internals
   ../../beacon_chain/extras,
-  ../../beacon_chain/ssz,
   ../../beacon_chain/eth1/merkle_minimal,
 
   # Mocking procs

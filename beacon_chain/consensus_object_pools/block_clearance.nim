@@ -13,6 +13,7 @@ import
   stew/[assign2, results],
   eth/keys,
   ../extras, ../beacon_clock,
+  ../ssz/spec_types,
   ../spec/[
     crypto, datatypes, digest, forkedbeaconstate_helpers, helpers, signatures,
     signatures_batch, state_transition],

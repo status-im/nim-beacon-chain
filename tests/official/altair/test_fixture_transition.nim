@@ -12,12 +12,12 @@ import
   # Standard library
   os, sequtils,
   # Status internal
-  faststreams, streams,
+  faststreams, streams, ssz_serialization,
   # Beacon chain internals
   ../../../beacon_chain/spec/[
     crypto, state_transition, presets, forkedbeaconstate_helpers, helpers],
   ../../../beacon_chain/spec/datatypes/[phase0, altair],
-  ../../../beacon_chain/[extras, ssz],
+  ../../../beacon_chain/extras,
   # Test utilities
   ../../testutil,
   ../fixtures_utils

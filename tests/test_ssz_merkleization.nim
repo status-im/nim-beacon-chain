@@ -1,9 +1,8 @@
 import
   std/[strutils, sequtils, macros, bitops],
-  stew/[bitops2, endians2],
+  stew/[bitops2, endians2], ssz_serialization,
   ../beacon_chain/spec/[beaconstate, datatypes, digest, helpers],
   ../beacon_chain/eth1/merkle_minimal,
-  ../beacon_chain/ssz,
   mocking/mock_deposits
 
 func round_step_down(x: Natural, step: static Natural): int =
@@ -34,7 +33,7 @@ func merkleTreeFromLeaves(
     let stop = round_step_down(prev_depth_len, 2)
     for i in countup(0, stop-1, 2):
       # hash by pair of previous nodes
-      let nodeHash = withEth2Hash:
+      let nodeHash = computeDigest:
         h.update result.nnznodes[depth-1][i]
         h.update result.nnznodes[depth-1][i+1]
       result.nnznodes[depth].add nodeHash
@@ -43,7 +42,7 @@ func merkleTreeFromLeaves(
       # If length is odd, the last one was skipped,
       # we need to combine it
       # with the zeroHash corresponding to the current depth
-      let nodeHash = withEth2Hash:
+      let nodeHash = computeDigest:
         h.update result.nnznodes[depth-1][^1]
         h.update zeroHashes[depth-1]
       result.nnznodes[depth].add nodeHash

@@ -71,33 +71,6 @@ func eth2digest*(v: openArray[byte]): Eth2Digest {.noInit.} =
     ctx.update(v)
     ctx.finish()
 
-template withEth2Hash*(body: untyped): Eth2Digest =
-  ## This little helper will init the hash function and return the sliced
-  ## hash:
-  ## let hashOfData = withHash: h.update(data)
-  when nimvm:
-    # In SSZ, computeZeroHashes require compile-time SHA256
-    block:
-      var h {.inject.}: sha256
-      init(h)
-      body
-      finish(h)
-  else:
-    when BLS_BACKEND == BLST:
-      block:
-        var h  {.inject, noInit.}: Eth2DigestCtx
-        init(h)
-        body
-        var res {.noInit.}: Eth2Digest
-        finalize(res.data, h)
-        res
-    else:
-      block:
-        var h  {.inject, noInit.}: Eth2DigestCtx
-        init(h)
-        body
-        finish(h)
-
 template hash*(x: Eth2Digest): Hash =
   ## Hash for digests for Nim hash tables
   # digests are already good hashes

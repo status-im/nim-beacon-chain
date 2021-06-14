@@ -16,9 +16,10 @@ import
   nimcrypto/hash,
   serialization,
   json_serialization,
+  ssz_serialization,
   # Internal
   ../spec/[datatypes, digest, crypto],
-  ../ssz,
+  ../ssz/spec_types,
   ./slashing_protection_common
 
 # Requirements

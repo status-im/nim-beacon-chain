@@ -17,7 +17,8 @@ import
   stew/assign2,
   json_serialization,
   json_serialization/types as jsonTypes,
-  ../../ssz/types as sszTypes, ../digest,
+  ssz_serialization/types as sszTypes,
+  ../digest,
   #web3/ethtypes,
   nimcrypto/utils
 

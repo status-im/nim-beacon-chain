@@ -6,14 +6,13 @@
 import
   std/[typetraits, sequtils, strutils, deques, sets, options],
   stew/[results, base10],
-  chronicles,
+  chronicles, ssz_serialization,
   nimcrypto/utils as ncrutils,
   ../beacon_node_common, ../networking/eth2_network,
   ../consensus_object_pools/[blockchain_dag, exit_pool],
   ../gossip_processing/gossip_validation,
   ../validators/validator_duties,
   ../spec/[crypto, datatypes, digest, forkedbeaconstate_helpers, network],
-  ../ssz/merkleization,
   ./eth2_json_rest_serialization, ./rest_utils
 
 logScope: topics = "rest_beaconapi"

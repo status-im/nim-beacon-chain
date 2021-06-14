@@ -9,12 +9,13 @@
 
 import
   # Standard library
-  os, sequtils, chronicles,
+  std/[os, sequtils],
+  # Utilities
+  chronicles, ssz_serialization,
   # Beacon chain internals
   ../../../beacon_chain/spec/[
     crypto, forkedbeaconstate_helpers, presets, state_transition],
   ../../../beacon_chain/spec/datatypes/altair,
-  ../../../beacon_chain/ssz,
   # Test utilities
   ../../testutil,
   ../fixtures_utils

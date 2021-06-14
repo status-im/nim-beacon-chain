@@ -9,19 +9,18 @@ import
   # Standard library
   os, strutils, typetraits,
   # Internals
-  ../../beacon_chain/ssz,
   ../../beacon_chain/spec/[datatypes, crypto, state_transition_epoch],
   # Status libs,
   snappy,
   stew/byteutils,
-  serialization, json_serialization
+  serialization, json_serialization, ssz_serialization
 
 export  # Workaround:
   #   - https://github.com/status-im/nim-serialization/issues/4
   #   - https://github.com/status-im/nim-serialization/issues/5
   #   - https://github.com/nim-lang/Nim/issues/11225
   serialization.readValue,
-  Json, ssz, crypto
+  Json, ssz_serialization, crypto
 
 # Process current EF test format
 # ---------------------------------------------

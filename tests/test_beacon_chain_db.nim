@@ -9,12 +9,13 @@
 
 import
   std/[algorithm, options, sequtils],
-  unittest2,
-  ../beacon_chain/[beacon_chain_db, extras, interop, ssz],
+  unittest2, ssz_serialization,
+  ../beacon_chain/[beacon_chain_db, extras, interop],
   ../beacon_chain/spec/[
     beaconstate, crypto, datatypes, digest, forkedbeaconstate_helpers, presets,
     state_transition],
   ../beacon_chain/consensus_object_pools/blockchain_dag,
+  ../beacon_chain/ssz/spec_types,
   eth/db/kvstore,
   # test utilies
   ./testutil, ./testdbutil, ./testblockutil, ./teststateutil

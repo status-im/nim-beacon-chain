@@ -5,7 +5,7 @@
 # at your option. This file may not be copied, modified, or distributed except according to those terms.
 import
   std/[typetraits, strutils, deques, sets, options],
-  stew/[results, base10],
+  stew/[results, base10], ssz_serialization,
   chronicles,
   nimcrypto/utils as ncrutils,
   ../beacon_node_common, ../networking/eth2_network,
@@ -13,7 +13,6 @@ import
   ../gossip_processing/gossip_validation,
   ../validators/validator_duties,
   ../spec/[crypto, datatypes, digest, forkedbeaconstate_helpers, network],
-  ../ssz/merkleization,
   ./eth2_json_rest_serialization, ./rest_utils
 
 logScope: topics = "rest_validatorapi"

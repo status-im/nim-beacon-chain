@@ -14,7 +14,7 @@ import
   stew/results,
   # Beacon chain internals
   ../../beacon_chain/spec/[validator, datatypes, helpers, state_transition_epoch],
-  ../../beacon_chain/ssz,
+  ../../beacon_chain/ssz/spec_types,
   # Test utilities
   ../testutil,
   ./fixtures_utils

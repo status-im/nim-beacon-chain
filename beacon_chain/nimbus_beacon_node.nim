@@ -17,6 +17,7 @@ import
   chronos, confutils, metrics, metrics/chronos_httpserver,
   chronicles, bearssl, blscurve, presto,
   json_serialization/std/[options, sets, net], serialization/errors,
+  ssz_serialization,
 
   eth/[keys, async_utils], eth/net/nat,
   eth/db/[kvstore, kvstore_sqlite3],
@@ -27,7 +28,7 @@ import
     beacon_chain_db,
     beacon_node_common, beacon_node_status, beacon_node_types, conf,
     extras, filepath, interop,
-    nimbus_binary_common, ssz/merkleization, statusbar,
+    nimbus_binary_common, statusbar,
     beacon_clock, version],
   ./networking/[eth2_discovery, eth2_network, network_metadata],
   ./gossip_processing/[eth2_processor, block_processor, consensus_manager],
@@ -46,7 +47,8 @@ import
   ./consensus_object_pools/[
     blockchain_dag, block_quarantine, block_clearance, block_pools_types,
     attestation_pool, exit_pool, spec_cache],
-  ./eth1/eth1_monitor
+  ./eth1/eth1_monitor,
+  ./ssz/spec_types
 
 from eth/common/eth_types import BlockHashOrNumber
 

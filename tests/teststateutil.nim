@@ -11,7 +11,6 @@ import
   options, stew/endians2,
   ./mocking/mock_deposits,
   ./helpers/math_helpers,
-  ../beacon_chain/ssz/merkleization,
   ../beacon_chain/spec/[
     beaconstate, crypto, datatypes, forkedbeaconstate_helpers, helpers,
     presets, state_transition]

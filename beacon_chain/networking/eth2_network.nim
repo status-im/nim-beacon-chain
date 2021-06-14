@@ -18,7 +18,7 @@ import
   stew/shims/[macros, tables],
   faststreams/[inputs, outputs, buffers], snappy, snappy/framing,
   json_serialization, json_serialization/std/[net, options],
-  chronos, chronicles, metrics,
+  chronos, chronicles, metrics, ssz_serialization,
   libp2p/[switch, peerinfo, multicodec,
           multiaddress, crypto/crypto, crypto/secp,
           protocols/identify, protocols/protocol,
@@ -32,10 +32,9 @@ import
   libp2p/utils/semaphore,
   eth/[keys, async_utils], eth/p2p/p2p_protocol_dsl,
   eth/net/nat, eth/p2p/discoveryv5/[enr, node, random2],
-  ".."/[
-    version, conf,
-    ssz/ssz_serialization, beacon_clock],
+  ".."/[version, conf, beacon_clock],
   ../spec/[datatypes, digest, network],
+  ../ssz/spec_types,
   ../validators/keystore_management,
   ./eth2_discovery, ./peer_pool, ./libp2p_json_serialization
 
@@ -1505,7 +1504,7 @@ func gossipId(data: openArray[byte], valid: bool): seq[byte] =
   const
     MESSAGE_DOMAIN_INVALID_SNAPPY = [0x00'u8, 0x00, 0x00, 0x00]
     MESSAGE_DOMAIN_VALID_SNAPPY = [0x01'u8, 0x00, 0x00, 0x00]
-  let messageDigest = withEth2Hash:
+  let messageDigest = computeDigest:
     h.update(
       if valid: MESSAGE_DOMAIN_VALID_SNAPPY else: MESSAGE_DOMAIN_INVALID_SNAPPY)
     h.update data

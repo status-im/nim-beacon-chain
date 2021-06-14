@@ -16,7 +16,7 @@ import
     datatypes, digest, forkedbeaconstate_helpers, helpers, state_transition,
     presets],
   ../beacon_chain/beacon_node_types,
-  ../beacon_chain/[beacon_chain_db, ssz],
+  ../beacon_chain/beacon_chain_db,
   ../beacon_chain/consensus_object_pools/[
     blockchain_dag, block_quarantine, block_clearance],
   ./testutil, ./testdbutil, ./testblockutil

@@ -10,7 +10,7 @@
 import
   std/macros,
   chronicles,
-  stew/[assign2, results],
+  stew/[assign2, results], ssz_serialization,
   ../extras,
   ../spec/[
     beaconstate, digest, helpers, presets, state_transition_block, validator],

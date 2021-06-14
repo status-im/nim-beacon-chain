@@ -15,7 +15,8 @@ import
   yaml,
   # Beacon chain internals
   ../../beacon_chain/spec/[datatypes, digest],
-  ../../beacon_chain/ssz,
+  ../../beacon_chain/ssz/spec_types,
+
   # Test utilities
   ./fixtures_utils
 

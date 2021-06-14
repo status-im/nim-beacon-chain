@@ -7,7 +7,7 @@
 
 import
   macros,
-  ../../beacon_chain/spec/[datatypes, crypto, digest], ../../beacon_chain/ssz/types
+  ../../beacon_chain/spec/[datatypes, crypto, digest]
   # digest is necessary for them to be printed as hex
 
 export crypto.`==`

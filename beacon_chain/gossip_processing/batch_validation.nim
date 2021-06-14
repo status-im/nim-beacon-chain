@@ -20,7 +20,7 @@ import
     attestation_pool, exit_pool,
     block_pools_types, spec_cache
   ],
-  ".."/[beacon_node_types, ssz, beacon_clock]
+  ".."/[beacon_node_types, beacon_clock]
 
 export BrHmacDrbgContext
 

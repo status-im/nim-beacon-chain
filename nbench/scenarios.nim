@@ -9,13 +9,13 @@ import
   # Standard library
   os, tables,
   # Status libraries
-  confutils/defs, serialization, chronicles,
+  confutils/defs, serialization, chronicles, ssz_serialization,
   # Beacon-chain
   ../beacon_chain/spec/[
       beaconstate, crypto, datatypes, forkedbeaconstate_helpers, helpers,
       state_transition, state_transition_block],
   ../beacon_chain/extras,
-  ../beacon_chain/ssz/[merkleization, ssz_serialization],
+  ../beacon_chain/ssz/spec_types,
   ../tests/official/fixtures_utils
 
 # Nimbus Bench - Scenario configuration

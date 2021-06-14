@@ -13,9 +13,10 @@ import
   # Standard lib
   std/[math, tables],
   # Third-party
-  stew/[byteutils, endians2],
+  stew/[byteutils, endians2], ssz_serialization,
   # Internal
-  ./datatypes/[phase0, altair], ./digest, ./crypto, ../ssz/merkleization
+  ../ssz/spec_types,
+  ./datatypes/[phase0, altair], ./digest, ./crypto
 
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#integer_squareroot
 func integer_squareroot*(n: SomeInteger): SomeInteger =

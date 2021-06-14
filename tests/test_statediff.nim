@@ -8,13 +8,12 @@
 {.used.}
 
 import
-  options, sequtils,
-  unittest2,
+  std/[options, sequtils],
+  unittest2, ssz_serialization,
   ./testutil, ./testdbutil, ./teststateutil,
   ../beacon_chain/spec/[
     datatypes, digest, forkedbeaconstate_helpers, helpers, presets],
   ../beacon_chain/[beacon_node_types, statediff],
-  ../beacon_chain/ssz,
   ../beacon_chain/consensus_object_pools/[blockchain_dag, block_quarantine]
 
 when isMainModule:

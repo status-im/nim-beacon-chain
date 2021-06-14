@@ -1,8 +1,9 @@
 import
   stats, os, strformat, times,
+  ssz_serialization,
   ../tests/testblockutil,
   ../beacon_chain/[extras, beacon_chain_db],
-  ../beacon_chain/ssz/[merkleization, ssz_serialization],
+  ../beacon_chain/ssz/spec_types,
   ../beacon_chain/spec/[
     beaconstate, crypto, datatypes, digest, forkedbeaconstate_helpers,
     helpers, presets],

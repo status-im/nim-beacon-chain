@@ -3,12 +3,11 @@ import
   stew/[results, base10, byteutils],
   chronicles, presto,
   faststreams/[outputs],
-  serialization, json_serialization,
+  serialization, json_serialization, ssz_serialization,
   nimcrypto/utils as ncrutils,
   ../beacon_node_common, ../networking/eth2_network,
   ../consensus_object_pools/[blockchain_dag, exit_pool],
   ../spec/[crypto, digest, datatypes],
-  ../ssz/merkleization,
   rest_utils
 export json_serialization
 

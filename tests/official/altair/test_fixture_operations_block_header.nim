@@ -9,13 +9,12 @@
 
 import
   # Standard library
-  os,
+  std/os,
   # Utilities
-  stew/results,
+  stew/results, ssz_serialization,
   # Beacon chain internals
   ../../../beacon_chain/spec/[state_transition_block, crypto],
   ../../../beacon_chain/spec/datatypes/altair,
-  ../../../beacon_chain/ssz,
   # Test utilities
   ../../testutil,
   ../fixtures_utils,

@@ -7,12 +7,11 @@
 
 {.push raises: [Defect].}
 
-import options, sequtils, strutils
-import chronos, chronicles
+import std/[options, sequtils, strutils]
+import chronos, chronicles, ssz_serialization
 import ../spec/[datatypes, digest],
        ../networking/eth2_network,
        ../beacon_node_types,
-       ../ssz/merkleization,
        ../gossip_processing/block_processor,
        ./sync_protocol, ./sync_manager
 export sync_manager

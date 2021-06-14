@@ -9,11 +9,12 @@
 
 import
   # Standard library
-  os,
+  std/os,
+  # Utilities
+  ssz_serialization,
   # Beacon chain internals
   ../../../beacon_chain/spec/beaconstate,
   ../../../beacon_chain/spec/datatypes/[phase0, altair],
-  ../../../beacon_chain/ssz,
   # Test utilities
   ../../testutil,
   ../fixtures_utils,

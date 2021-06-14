@@ -10,8 +10,9 @@
 import
   std/[options, sequtils, tables, sets],
   stew/[assign2, byteutils],
-  metrics, snappy, chronicles,
-  ../ssz/[ssz_serialization, merkleization], ../beacon_chain_db, ../extras,
+  metrics, snappy, chronicles, ssz_serialization,
+  ../beacon_chain_db, ../extras,
+  ../ssz/spec_types,
   ../spec/[
     crypto, digest, helpers, validator, state_transition,
     beaconstate, forkedbeaconstate_helpers],

@@ -9,14 +9,13 @@
 
 import
   # Standard library
-  os,
+  std/os,
   # Utilities
   unittest2,
-  stew/results,
+  stew/results, ssz_serialization,
   # Beacon chain internals
   ../../../beacon_chain/spec/beaconstate,
   ../../../beacon_chain/spec/datatypes/phase0,
-  ../../../beacon_chain/ssz,
   # Test utilities
   ../../testutil,
   ../fixtures_utils,

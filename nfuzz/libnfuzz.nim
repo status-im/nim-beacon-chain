@@ -2,12 +2,12 @@
 # https://github.com/nim-lang/Nim/issues/11225
 
 import
-  stew/ptrops, stew/ranges/ptr_arith, chronicles,
+  stew/ptrops, stew/ranges/ptr_arith, chronicles, ssz_serialization,
   ../beacon_chain/extras,
   ../beacon_chain/spec/[
     beaconstate, crypto, datatypes, digest, forkedbeaconstate_helpers, presets,
       validator, state_transition, state_transition_block],
-  ../beacon_chain/ssz/[merkleization, ssz_serialization]
+  ../beacon_chain/ssz/spec_types
 
 type
   AttestationInput = object

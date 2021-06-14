@@ -11,10 +11,11 @@ import
   std/[os, strutils, terminal, wordwrap, unicode],
   chronicles, chronos, web3, stint, json_serialization, zxcvbn,
   serialization, blscurve, eth/common/eth_types, eth/keys, confutils, bearssl,
-  ../spec/[datatypes, digest, crypto, keystore],
-  stew/io2, libp2p/crypto/crypto as lcrypto,
+  ssz_serialization, stew/io2,
+  libp2p/crypto/crypto as lcrypto,
   nimcrypto/utils as ncrutils,
-  ".."/[conf, ssz/merkleization, filepath],
+  ../spec/[datatypes, digest, crypto, keystore],
+  ".."/[conf, filepath],
   ../networking/network_metadata
 
 export

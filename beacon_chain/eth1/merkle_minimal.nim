@@ -13,11 +13,10 @@
 # ---------------------------------------------------------------
 
 import
-  sequtils,
-  stew/endians2,
+  std/sequtils,
+  stew/endians2, ssz_serialization,
   # Specs
-  ../../beacon_chain/spec/[datatypes, digest],
-  ../../beacon_chain/ssz/merkleization
+  ../../beacon_chain/spec/[datatypes, digest]
 
 const depositContractLimit* = Limit(1'u64 shl DEPOSIT_CONTRACT_TREE_DEPTH)
 

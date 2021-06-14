@@ -10,10 +10,9 @@
 import
   tables,
   stew/[assign2, io2, objects, results],
-  serialization,
+  serialization, ssz_serialization,
   eth/db/[kvstore, kvstore_sqlite3],
   ./spec/[crypto, datatypes, digest],
-  ./ssz/[ssz_serialization, merkleization],
   filepath
 
 type

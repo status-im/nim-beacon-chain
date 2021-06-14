@@ -22,9 +22,10 @@ import
     spec_cache, blockchain_dag, block_quarantine, spec_cache,
     attestation_pool, exit_pool
   ],
-  ".."/[beacon_node_types, ssz, beacon_clock],
+  ".."/[beacon_node_types, beacon_clock],
   ../validators/attestation_aggregation,
   ../extras,
+  ../ssz/spec_types,
   ./batch_validation
 
 from libp2p/protocols/pubsub/pubsub import ValidationResult

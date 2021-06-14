@@ -188,18 +188,6 @@ OK: 3/3 Fail: 0/3 Skip: 0/3
 + deletePeer() test                                                                          OK
 ```
 OK: 12/12 Fail: 0/12 Skip: 0/12
-## SSZ dynamic navigator
-```diff
-+ navigating fields                                                                          OK
-```
-OK: 1/1 Fail: 0/1 Skip: 0/1
-## SSZ navigator
-```diff
-+ basictype                                                                                  OK
-+ lists with max size                                                                        OK
-+ simple object fields                                                                       OK
-```
-OK: 3/3 Fail: 0/3 Skip: 0/3
 ## Slashing Protection DB - Interchange [Preset: mainnet]
 ```diff
 + Smoke test - Complete format - Invalid database is refused [Preset: mainnet]               OK
@@ -294,13 +282,6 @@ OK: 8/8 Fail: 0/8 Skip: 0/8
 + prune heads on finalization [Preset: mainnet]                                              OK
 ```
 OK: 3/3 Fail: 0/3 Skip: 0/3
-## hash
-```diff
-+ HashArray                                                                                  OK
-+ HashList fixed                                                                             OK
-+ HashList variable                                                                          OK
-```
-OK: 3/3 Fail: 0/3 Skip: 0/3
 ## state diff tests [Preset: mainnet]
 ```diff
 + random slot differences [Preset: mainnet]                                                  OK
@@ -308,4 +289,4 @@ OK: 3/3 Fail: 0/3 Skip: 0/3
 OK: 1/1 Fail: 0/1 Skip: 0/1
 
 ---TOTAL---
-OK: 174/182 Fail: 0/182 Skip: 8/182
+OK: 167/175 Fail: 0/175 Skip: 8/175

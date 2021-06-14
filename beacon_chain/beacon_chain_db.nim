@@ -10,12 +10,12 @@
 import
   std/[typetraits, tables],
   stew/[arrayops, assign2, byteutils, endians2, io2, objects, results],
-  serialization, chronicles, snappy,
+  serialization, chronicles, snappy, ssz_serialization,
   eth/db/[kvstore, kvstore_sqlite3],
   ./networking/network_metadata, ./beacon_chain_db_immutable,
   ./spec/[crypto, digest, state_transition],
   ./spec/datatypes/[phase0, altair],
-  ./ssz/[ssz_serialization, merkleization],
+  ./ssz/spec_types,
   ./filepath
 
 export crypto

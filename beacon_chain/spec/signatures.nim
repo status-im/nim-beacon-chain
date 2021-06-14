@@ -8,7 +8,8 @@
 {.push raises: [Defect].}
 
 import
-  ../ssz/merkleization,
+  ssz_serialization,
+  ../ssz/spec_types,
   ./crypto, ./digest, ./datatypes/[phase0, altair], ./helpers, ./presets
 
 template withTrust(sig: SomeSig, body: untyped): bool =

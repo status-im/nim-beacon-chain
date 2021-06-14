@@ -21,9 +21,8 @@
 
 import
   std/[math, sequtils, sets, tables, algorithm],
-  stew/[bitops2], chronicles,
-  ../extras,
-  ../ssz/merkleization,
+  stew/[bitops2], chronicles, ssz_serialization,
+  ../extras, ../ssz/spec_types,
   ./beaconstate, ./crypto, ./datatypes/[phase0, altair], ./digest, ./helpers, ./validator,
   ../../nbench/bench_lab
 

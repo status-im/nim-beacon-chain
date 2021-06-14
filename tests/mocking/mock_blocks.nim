@@ -6,11 +6,10 @@
 # at your option. This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  options,
+  std/options,
+  ssz_serialization,
   # Specs
   ../../beacon_chain/spec/[crypto, datatypes, helpers, signatures, validator],
-  # Internals
-  ../../beacon_chain/ssz,
   # Mock helpers
   ./mock_validator_keys
 

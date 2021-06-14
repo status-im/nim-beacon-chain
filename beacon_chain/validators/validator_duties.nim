@@ -30,7 +30,7 @@ import
   ../eth1/eth1_monitor,
   ../networking/eth2_network,
   ".."/[beacon_node_common, beacon_node_types, version],
-  ../ssz, ../ssz/sszdump, ../sync/sync_manager,
+  ../ssz/[sszdump, spec_types], ../sync/sync_manager,
   ./slashing_protection, ./attestation_aggregation,
   ./validator_pool, ./keystore_management,
   ../gossip_processing/consensus_manager

@@ -12,11 +12,11 @@ import
   confutils, stats, times,
   strformat,
   options, sequtils, random, tables,
+  ssz_serialization,
   ../tests/testblockutil,
   ../beacon_chain/spec/[
    beaconstate, crypto, datatypes, digest, forkedbeaconstate_helpers, helpers],
   ../beacon_chain/extras,
-  ../beacon_chain/ssz/[merkleization, ssz_serialization],
   ./simutils
 
 type Timers = enum

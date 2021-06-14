@@ -43,8 +43,8 @@
 import
   std/tables,
   chronicles,
-  stew/results,
-  ../extras, ../ssz/merkleization, metrics,
+  stew/results, ssz_serialization,
+  ../extras, ../ssz/spec_types, metrics,
   ./datatypes/[phase0, altair], ./crypto, ./digest, ./helpers, ./signatures, ./validator, ./beaconstate,
   ./state_transition_block, ./state_transition_epoch, forkedbeaconstate_helpers,
   ../../nbench/bench_lab

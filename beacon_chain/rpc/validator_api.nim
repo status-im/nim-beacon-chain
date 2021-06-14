@@ -12,14 +12,14 @@ import
   std/[tables],
 
   # Nimble packages
-  stew/[objects],
+  stew/[objects], ssz_serialization,
   json_rpc/servers/httpserver,
   chronicles,
 
   # Local modules
   ../spec/[crypto, datatypes, digest, forkedbeaconstate_helpers, helpers, network, signatures],
   ../spec/eth2_apis/callsigs_types,
-  ../consensus_object_pools/[blockchain_dag, spec_cache, attestation_pool], ../ssz/merkleization,
+  ../consensus_object_pools/[blockchain_dag, spec_cache, attestation_pool],
   ../beacon_node_common, ../beacon_node_types,
   ../validators/validator_duties,
   ../networking/eth2_network,

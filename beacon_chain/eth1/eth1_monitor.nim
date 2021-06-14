@@ -13,12 +13,11 @@ import
   # Nimble packages:
   chronos, json, metrics, chronicles/timings,
   web3, web3/ethtypes as web3Types, web3/ethhexstrings, eth/common/eth_types,
-  eth/async_utils, stew/byteutils,
+  eth/async_utils, stew/byteutils, ssz_serialization,
   # Local modules:
   ../spec/[datatypes, digest, crypto, forkedbeaconstate_helpers, helpers],
   ../networking/network_metadata,
   ../consensus_object_pools/block_pools_types,
-  ../ssz,
   ../rpc/eth_merge_web3,
   ".."/[beacon_chain_db, beacon_node_status],
   ./merkle_minimal

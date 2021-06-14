@@ -29,7 +29,6 @@ import
   json_rpc/jsonmarshal,
 
   # Local modules
-  ../ssz/types,
   ../spec/[datatypes, crypto, digest]
 
 export jsonmarshal, datatypes, crypto, digest

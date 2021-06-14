@@ -32,7 +32,7 @@ import
   std/macros,
   stew/[assign2, bitops2],
   json_serialization/types as jsonTypes,
-  ../../ssz/types as sszTypes, ../crypto, ../digest, ../presets
+  ../crypto, ../digest, ../presets
 
 import ./base, ./phase0
 export base

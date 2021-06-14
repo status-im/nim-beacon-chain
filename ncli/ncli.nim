@@ -1,13 +1,13 @@
 import
   std/[os, strutils, stats],
-  confutils, chronicles, json_serialization,
+  confutils, chronicles, json_serialization, ssz_serialization,
   stew/byteutils,
   ../research/simutils,
   ../beacon_chain/spec/[
     crypto, datatypes, digest, forkedbeaconstate_helpers, helpers, state_transition],
   ../beacon_chain/extras,
   ../beacon_chain/networking/network_metadata,
-  ../beacon_chain/ssz/[merkleization, ssz_serialization]
+  ../beacon_chain/ssz/spec_types
 
 type
   Cmd* = enum

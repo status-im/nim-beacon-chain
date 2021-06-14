@@ -3,7 +3,7 @@
 import
   unittest2,
   std/[sequtils, strformat],
-  ../beacon_chain/ssz/bitseqs,
+  ssz_serialization/bitseqs,
   ./testutil
 
 suite "Bit fields":

@@ -1,10 +1,9 @@
 {.push raises: [Defect].}
 
 import
-  stew/[endians2, results],
+  stew/[endians2, results], ssz_serialization/ssz,
   snappy, snappy/framing,
-  ../beacon_chain/spec/datatypes,
-  ../beacon_chain/ssz/ssz_serialization
+  ../beacon_chain/spec/datatypes
 
 const
   E2Version = [byte 0x65, 0x32]

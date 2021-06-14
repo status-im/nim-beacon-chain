@@ -15,8 +15,9 @@ import
   chronicles,
   json_serialization,
   json_serialization/std/[options, sets, net], serialization/errors,
-  ../ssz/navigator,
+  ssz_serialization/navigator,
   eth/common/eth_types_json_serialization,
+  ../ssz/spec_types,
   ../spec/[presets, datatypes, digest]
 
 # ATTENTION! This file will produce a large C file, because we are inlining

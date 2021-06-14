@@ -9,10 +9,10 @@
 
 import
   std/[algorithm, collections/heapqueue, math, options, sequtils, tables],
-  stew/assign2,
+  stew/assign2, ssz_serialization,
   json_serialization/std/sets,
   chronicles,
-  ../extras, ../ssz/merkleization,
+  ../extras, ../ssz/spec_types,
   ./crypto, ./datatypes/[phase0, altair], ./digest, ./helpers, ./signatures, ./validator,
   ../../nbench/bench_lab
 

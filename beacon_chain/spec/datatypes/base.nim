@@ -28,7 +28,8 @@ import
   std/[macros, hashes, intsets, strutils, tables, typetraits],
   stew/[assign2, byteutils], chronicles,
   json_serialization,
-  ../../version, ../../ssz/types as sszTypes, ../crypto, ../digest, ../presets,
+  ssz_serialization/types as sszTypes,
+  ../../version, ../crypto, ../digest, ../presets,
   ./merge
 
 export
@@ -637,15 +638,6 @@ proc readValue*(reader: var JsonReader, value: var SubnetId)
       reader, "Subnet id must be <= " & $ATTESTATION_SUBNET_COUNT)
   value = SubnetId(v)
 
-proc writeValue*(writer: var JsonWriter, value: HashList)
-                {.raises: [IOError, SerializationError, Defect].} =
-  writeValue(writer, value.data)
-
-proc readValue*(reader: var JsonReader, value: var HashList)
-               {.raises: [IOError, SerializationError, Defect].} =
-  value.resetCache()
-  readValue(reader, value.data)
-
 template writeValue*(writer: var JsonWriter, value: Version | ForkDigest) =
   writeValue(writer, $value)
 
@@ -727,19 +719,6 @@ Json.useCustomSerialization(BitSeq):
 
   write:
     writer.writeValue "0x" & seq[byte](value).toHex
-
-template readValue*(reader: var JsonReader, value: var List) =
-  value = type(value)(readValue(reader, seq[type value[0]]))
-
-template writeValue*(writer: var JsonWriter, value: List) =
-  writeValue(writer, asSeq value)
-
-template readValue*(reader: var JsonReader, value: var BitList) =
-  type T = type(value)
-  value = T readValue(reader, BitSeq)
-
-template writeValue*(writer: var JsonWriter, value: BitList) =
-  writeValue(writer, BitSeq value)
 
 template newClone*[T: not ref](x: T): ref T =
   # TODO not nil in return type: https://github.com/nim-lang/Nim/issues/14146

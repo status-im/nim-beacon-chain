@@ -15,7 +15,7 @@ import
   stew/shims/[tables, macros],
   chronos, confutils, metrics,
   chronicles,
-  json_serialization/std/[options, net],
+  json_serialization/std/[options, net], ssz_serialization,
 
   # Local modules
   ./spec/[datatypes, digest, crypto, helpers, network, signatures],
@@ -25,7 +25,6 @@ import
   ./networking/[eth2_network, eth2_discovery],
   ./beacon_node_types,
   ./nimbus_binary_common,
-  ./ssz/merkleization,
   ./spec/eth2_apis/callsigs_types,
   ./validators/[attestation_aggregation, keystore_management, validator_pool, slashing_protection],
   ./eth/db/[kvstore, kvstore_sqlite3],
