@@ -69,6 +69,7 @@ type
     is_syncing*: bool
 
   RestConfig* = object
+    CONFIG_NAME*: string
     MAX_COMMITTEES_PER_SLOT*: uint64
     TARGET_COMMITTEE_SIZE*: uint64
     MAX_VALIDATORS_PER_COMMITTEE*: uint64
