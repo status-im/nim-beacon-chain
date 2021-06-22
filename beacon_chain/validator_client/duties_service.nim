@@ -137,6 +137,7 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef,
     for item in addOrReplaceItems:
       let validator = vc.attachedValidators.getValidator(item.duty.pubkey)
       let future = validator.getSlotSig(fork, genesisRoot, item.duty.slot)
+      pending.add(future)
 
     await allFutures(pending)
 

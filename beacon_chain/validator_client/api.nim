@@ -356,7 +356,7 @@ proc getGenericErrorMessage(response: RestPlainResponse): string =
   if res.isOk():
     let errorObj = res.get()
     if errorObj.stacktraces.isSome():
-      errorObj.message & ": [" & errorObj.stacktraces.get() & "]"
+      errorObj.message & ": [" & errorObj.stacktraces.get().join("; ") & "]"
     else:
       errorObj.message
   else:

@@ -133,7 +133,7 @@ type
   RestGenericError* = object
     code*: uint64
     message*: string
-    stacktraces*: Option[string]
+    stacktraces*: Option[seq[string]]
 
   RestAttestationError* = object
     code*: uint64
@@ -160,10 +160,10 @@ type
   DataRestVersion* = DataEnclosedObject[RestVersion]
   DataRestConfig* = DataEnclosedObject[RestConfig]
 
-  EncodeDataTypes* = seq[RestCommitteeSubscription]
   EncodeTypes* = SignedBeaconBlock
   EncodeArrays* = seq[ValidatorIndex] | seq[Attestation] |
-                  seq[SignedAggregateAndProof]
+                  seq[SignedAggregateAndProof] | seq[RestCommitteeSubscription]
+
   DecodeTypes* = DataRestBeaconGenesis | DataRestFork | DataRestProposerDuties |
                  DataRestAttesterDuties | DataRestBeaconBlock |
                  DataRestAttestationData | DataRestAttestation |
@@ -205,7 +205,41 @@ proc jsonResponseWMeta*(t: typedesc[RestApiResponse],
                            "application/json")
 
 proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
-                msg: string = "", stacktrace: string = ""): RestApiResponse =
+                msg: string = ""): RestApiResponse =
+  let data =
+    block:
+      var default: seq[string]
+      var stream = memoryOutput()
+      var writer = JsonWriter[RestJson].init(stream)
+      writer.beginRecord()
+      writer.writeField("code", Base10.toString(uint64(status.toInt())))
+      writer.writeField("message", msg)
+      writer.writeField("stacktrace", default)
+      writer.endRecord()
+      stream.getOutput(string)
+  RestApiResponse.error(status, data, "application/json")
+
+proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
+                msg: string = "", stacktrace: string): RestApiResponse =
+  let data =
+    block:
+      var default: seq[string]
+      var stream = memoryOutput()
+      var writer = JsonWriter[RestJson].init(stream)
+      writer.beginRecord()
+      writer.writeField("code", Base10.toString(uint64(status.toInt())))
+      writer.writeField("message", msg)
+      if len(stacktrace) > 0:
+        writer.writeField("stacktrace", [stacktrace])
+      else:
+        writer.writeField("stacktrace", default)
+      writer.endRecord()
+      stream.getOutput(string)
+  RestApiResponse.error(status, data, "application/json")
+
+proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
+                msg: string = "",
+                stacktraces: openarray[string]): RestApiResponse =
   let data =
     block:
       var stream = memoryOutput()
@@ -213,8 +247,7 @@ proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
       writer.beginRecord()
       writer.writeField("code", Base10.toString(uint64(status.toInt())))
       writer.writeField("message", msg)
-      if len(stacktrace) > 0:
-        writer.writeField("stacktrace", stacktrace)
+      writer.writeField("stacktrace", stacktraces)
       writer.endRecord()
       stream.getOutput(string)
   RestApiResponse.error(status, data, "application/json")
@@ -546,19 +579,6 @@ RestJson.useCustomSerialization(BeaconState.justification_bits):
   write:
     writer.writeValue "0x" & toHex([value])
 
-proc encodeBytes*[T: EncodeDataTypes](value: T,
-                                   contentType: string): RestResult[seq[byte]] =
-  case contentType
-  of "application/json":
-    var stream = memoryOutput()
-    var writer = JsonWriter[RestJson].init(stream)
-    writer.beginRecord()
-    writer.writeField("data", value)
-    writer.endRecord()
-    ok(stream.getOutput(seq[byte]))
-  else:
-    err("Content-Type not supported")
-
 proc encodeBytes*[T: EncodeTypes](value: T,
                                    contentType: string): RestResult[seq[byte]] =
   case contentType
@@ -632,4 +652,3 @@ proc encodeString*(value: StateIdent): RestResult[string] =
       ok("finalized")
     of StateIdentType.Justified:
       ok("justified")
-
