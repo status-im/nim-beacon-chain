@@ -618,7 +618,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
         node.network.broadcast(blocksTopic, blck)
         return RestApiResponse.jsonError(Http202, BlockValidationError)
       else:
-        return RestApiResponse.jsonError(Http200, BlockValidationSuccess)
+        return RestApiResponse.jsonMsgResponse(BlockValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getBlock
   router.api(MethodGet, "/api/eth/v1/beacon/blocks/{block_id}") do (
@@ -718,7 +718,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
       return RestApiResponse.jsonErrorList(Http400, AttestationValidationError,
                                            failures)
     else:
-      return RestApiResponse.jsonError(Http200, AttestationValidationSuccess)
+      return RestApiResponse.jsonMsgResponse(AttestationValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getPoolAttesterSlashings
   router.api(MethodGet, "/api/eth/v1/beacon/pool/attester_slashings") do (
@@ -752,7 +752,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
                                            $vres.error())
         res
     node.sendAttesterSlashing(slashing)
-    return RestApiResponse.jsonError(Http200, AttesterSlashingValidationSuccess)
+    return RestApiResponse.jsonMsgResponse(AttesterSlashingValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getPoolProposerSlashings
   router.api(MethodGet, "/api/eth/v1/beacon/pool/proposer_slashings") do (
@@ -786,7 +786,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
                                            $vres.error())
         res
     node.sendProposerSlashing(slashing)
-    return RestApiResponse.jsonError(Http200, ProposerSlashingValidationSuccess)
+    return RestApiResponse.jsonMsgResponse(ProposerSlashingValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getPoolVoluntaryExits
   router.api(MethodGet, "/api/eth/v1/beacon/pool/voluntary_exits") do (
@@ -820,7 +820,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
                                            $vres.error())
         res
     node.sendVoluntaryExit(exit)
-    return RestApiResponse.jsonError(Http200, VoluntaryExitValidationSuccess)
+    return RestApiResponse.jsonMsgResponse(VoluntaryExitValidationSuccess)
 
   router.redirect(
     MethodGet,

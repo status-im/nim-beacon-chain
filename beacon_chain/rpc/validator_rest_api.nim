@@ -290,8 +290,7 @@ proc installValidatorApiHandlers*(router: var RestRouter, node: BeaconNode) =
                                          $res.error())
       node.network.broadcast(node.topicAggregateAndProofs, item)
 
-    return RestApiResponse.jsonError(Http200,
-                                     AggregateAndProofValidationSuccess)
+    return RestApiResponse.jsonMsgResponse(AggregateAndProofValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Validator/prepareBeaconCommitteeSubnet
   router.api(MethodPost,
@@ -346,8 +345,7 @@ proc installValidatorApiHandlers*(router: var RestRouter, node: BeaconNode) =
         request.committee_index)
       )
     warn "Beacon committee subscription request served, but not implemented"
-    return RestApiResponse.jsonError(Http200,
-                                     BeaconCommitteeSubscriptionSuccess)
+    return RestApiResponse.jsonMsgResponse(BeaconCommitteeSubscriptionSuccess)
 
   router.redirect(
     MethodPost,

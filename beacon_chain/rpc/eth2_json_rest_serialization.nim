@@ -204,6 +204,21 @@ proc jsonResponseWMeta*(t: typedesc[RestApiResponse],
   RestApiResponse.response(stream.getOutput(seq[byte]), Http200,
                            "application/json")
 
+proc jsonMsgResponse*(t: typedesc[RestApiResponse],
+                      msg: string = ""): RestApiResponse =
+  let data =
+    block:
+      var default: seq[string]
+      var stream = memoryOutput()
+      var writer = JsonWriter[RestJson].init(stream)
+      writer.beginRecord()
+      writer.writeField("code", "200")
+      writer.writeField("message", msg)
+      writer.writeField("stacktrace", default)
+      writer.endRecord()
+      stream.getOutput(seq[byte])
+  RestApiResponse.response(data, Http200, "application/json")
+
 proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
                 msg: string = ""): RestApiResponse =
   let data =
