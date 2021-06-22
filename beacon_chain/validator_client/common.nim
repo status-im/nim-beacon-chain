@@ -198,6 +198,25 @@ proc getDurationToNextAttestation*(vc: ValidatorClientRef,
   else:
     $(minimumDuration + seconds(int64(SECONDS_PER_SLOT) div 3))
 
+proc getDurationToNextBlock*(vc: ValidatorClientRef, slot: Slot): string =
+  var minimumDuration = InfiniteDuration
+  var currentSlotTime = Duration(slot.toBeaconTime())
+  let currentEpoch = slot.epoch()
+  for epoch in [currentEpoch, currentEpoch + 1'u64]:
+    let data = vc.proposers.getOrDefault(epoch)
+    if not(data.isDefault()):
+      for item in data.duties:
+        if item.pubkey in vc.attachedValidators:
+          let proposalSlotTime = Duration(item.slot.toBeaconTime())
+          if proposalSlotTime >= currentSlotTime:
+            let timeLeft = proposalSlotTime - currentSlotTime
+            if timeLeft < minimumDuration:
+              minimumDuration = timeLeft
+  if minimumDuration == InfiniteDuration:
+    "<unknown>"
+  else:
+    $minimumDuration
+
 iterator attesterDutiesForEpoch*(vc: ValidatorClientRef,
                                  epoch: Epoch): DutyAndProof =
   for key, item in vc.attesters.pairs():
