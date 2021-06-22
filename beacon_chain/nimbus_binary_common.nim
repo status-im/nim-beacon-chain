@@ -20,7 +20,7 @@ import
 
   # Local modules
   ./spec/[crypto, helpers], ./spec/datatypes/base, beacon_clock, filepath,
-  ./networking/eth2_network
+  ./beacon_node_status, ./networking/eth2_network
 
 when defined(posix):
   import termios
