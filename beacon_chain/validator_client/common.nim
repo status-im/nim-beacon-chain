@@ -31,6 +31,7 @@ const
   SLOT_LOOKAHEAD* = 1.seconds
   HISTORICAL_DUTIES_EPOCHS* = 2'u64
   TIME_DELAY_FROM_SLOT* = 79.milliseconds
+  SUBSCRIPTION_BUFFER_SLOTS* = 2'u64
 
 type
   ServiceState* {.pure.} = enum
@@ -59,6 +60,7 @@ type
     epoch*: Epoch
     dependentRoot*: Eth2Digest
     data*: RestAttesterDuty
+    slotSig*: Option[ValidatorSig]
 
   ProposedData* = object
     epoch*: Epoch
@@ -74,12 +76,15 @@ type
     syncInfo*: Option[RestSyncInfo]
     status*: RestBeaconNodeStatus
 
+  EpochDuties* = object
+    duties*: Table[Epoch, DutyAndProof]
+
   RestBeaconNodeStatus* {.pure.} = enum
     Uninitalized, Offline, Incompatible, NotSynced, Online
 
   BeaconNodeServerRef* = ref BeaconNodeServer
 
-  AttesterMap* = Table[ValidatorPubKey, Table[Epoch, DutyAndProof]]
+  AttesterMap* = Table[ValidatorPubKey, EpochDuties]
   ProposerMap* = Table[Epoch, ProposedData]
 
   ValidatorClient* = object
@@ -140,8 +145,10 @@ proc isDefault*(prd: ProposedData): bool =
   prd.epoch == Epoch(0xFFFF_FFFF_FFFF_FFFF'u64)
 
 proc init*(t: typedesc[DutyAndProof], epoch: Epoch, dependentRoot: Eth2Digest,
-           duty: RestAttesterDuty): DutyAndProof =
-  DutyAndProof(epoch: epoch, dependentRoot: dependentRoot, data: duty)
+           duty: RestAttesterDuty,
+           slotSig: Option[ValidatorSig]): DutyAndProof =
+  DutyAndProof(epoch: epoch, dependentRoot: dependentRoot, data: duty,
+               slotSig: slotSig)
 
 proc init*(t: typedesc[ProposedData], epoch: Epoch, dependentRoot: Eth2Digest,
            data: openarray[RestProposerDuty]): ProposedData =
@@ -166,7 +173,7 @@ proc getAttesterDutiesForSlot*(vc: ValidatorClientRef,
   var res: seq[RestAttesterDuty]
   let epoch = slot.epoch()
   for key, item in vc.attesters.pairs():
-    let duty = item.getOrDefault(epoch, DefaultDutyAndProof)
+    let duty = item.duties.getOrDefault(epoch, DefaultDutyAndProof)
     if not(duty.isDefault()):
       if duty.data.slot == slot:
         res.add(duty.data)
@@ -179,7 +186,7 @@ proc getDurationToNextAttestation*(vc: ValidatorClientRef,
   let currentEpoch = slot.epoch()
   for epoch in [currentEpoch, currentEpoch + 1'u64]:
     for key, item in vc.attesters.pairs():
-      let duty = item.getOrDefault(epoch, DefaultDutyAndProof)
+      let duty = item.duties.getOrDefault(epoch, DefaultDutyAndProof)
       if not(duty.isDefault()):
         let dutySlotTime = Duration(duty.data.slot.toBeaconTime())
         if dutySlotTime >= currentSlotTime:
@@ -190,3 +197,10 @@ proc getDurationToNextAttestation*(vc: ValidatorClientRef,
     "<unknown>"
   else:
     $(minimumDuration + seconds(int64(SECONDS_PER_SLOT) div 3))
+
+iterator attesterDutiesForEpoch*(vc: ValidatorClientRef,
+                                 epoch: Epoch): DutyAndProof =
+  for key, item in vc.attesters.pairs():
+    let epochDuties = item.duties.getOrDefault(epoch)
+    if not(isDefault(epochDuties)):
+      yield epochDuties

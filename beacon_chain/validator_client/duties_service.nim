@@ -61,7 +61,8 @@ proc pollForValidatorIndices*(vc: ValidatorClientRef) {.async.} =
       vc.attachedValidators.updateValidator(item.validator.pubkey,
                                             item.index)
 
-proc pollForAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch) {.async.} =
+proc pollForAttesterDuties*(vc: ValidatorClientRef,
+                            epoch: Epoch): Future[int] {.async.} =
   let validatorIndices =
     block:
       var res: seq[ValidatorIndex]
@@ -102,38 +103,68 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch) {.async.} =
 
     offset += arraySize
 
-  let relevantDuties = duties.filterIt(
-    checkDuty(it) and (it.pubkey in vc.attachedValidators)
-  )
-  let dependentRoot = currentRoot.get()
-  var alreadyWarned = false
+  let
+    relevantDuties = duties.filterIt(
+      checkDuty(it) and (it.pubkey in vc.attachedValidators)
+    )
+    dependentRoot = currentRoot.get()
+    fork = vc.fork.get()
+    genesisRoot = vc.beaconGenesis.genesis_validators_root
 
-  for duty in relevantDuties:
-    let dutyAndProof = DutyAndProof.init(epoch, dependentRoot, duty)
-    var map = vc.attesters.getOrDefault(duty.pubkey)
-    let epochDuty = map.getOrDefault(epoch, DefaultDutyAndProof)
-    if not(epochDuty.isDefault()):
-      if epochDuty.dependentRoot != dependentRoot:
-        if not(alreadyWarned):
-          warn "Attester duties re-organization",
-               prior_dependent_root = epochDuty.dependentRoot,
-               dependent_root = dependentRoot
-          alreadyWarned = true
-    else:
-      info "Received new attester duty", duty, epoch = epoch,
-                                         dependent_root = dependentRoot
-    map[epoch] = dutyAndProof
-    vc.attesters[duty.pubkey] = map
+  let addOrReplaceItems =
+    block:
+      var alreadyWarned = false
+      var res: seq[tuple[epoch: Epoch, duty: RestAttesterDuty]]
+      for duty in relevantDuties:
+        let map = vc.attesters.getOrDefault(duty.pubkey)
+        let epochDuty = map.duties.getOrDefault(epoch, DefaultDutyAndProof)
+        if not(epochDuty.isDefault()):
+          if epochDuty.dependentRoot != dependentRoot:
+            res.add((epoch, duty))
+            if not(alreadyWarned):
+              warn "Attester duties re-organization",
+                   prior_dependent_root = epochDuty.dependentRoot,
+                   dependent_root = dependentRoot
+              alreadyWarned = true
+        else:
+          info "Received new attester duty", duty, epoch = epoch,
+                                             dependent_root = dependentRoot
+          res.add((epoch, duty))
+      res
 
-proc pruneAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch) =
+  if len(addOrReplaceItems) > 0:
+    var pending: seq[Future[ValidatorSig]]
+    for item in addOrReplaceItems:
+      let validator = vc.attachedValidators.getValidator(item.duty.pubkey)
+      let future = validator.getSlotSig(fork, genesisRoot, item.duty.slot)
+
+    await allFutures(pending)
+
+    for index, fut in pending.pairs():
+      let item = addOrReplaceItems[index]
+      let dap =
+        if fut.done():
+          DutyAndProof.init(item.epoch, dependentRoot, item.duty,
+                            some(fut.read()))
+        else:
+          DutyAndProof.init(item.epoch, dependentRoot, item.duty,
+                            none[ValidatorSig]())
+
+      var validatorDuties = vc.attesters.getOrDefault(item.duty.pubkey)
+      validatorDuties.duties[item.epoch] = dap
+      vc.attesters[item.duty.pubkey] = validatorDuties
+
+  return len(addOrReplaceItems)
+
+proc pruneAttesterDuties(vc: ValidatorClientRef, epoch: Epoch) =
   var attesters: AttesterMap
   for key, item in vc.attesters.pairs():
-    var v: Table[Epoch, DutyAndProof]
-    for epochKey, duty in item.pairs():
+    var v = EpochDuties()
+    for epochKey, epochDuty in item.duties.pairs():
       if (epochKey + HISTORICAL_DUTIES_EPOCHS) >= epoch:
-        v[epochKey] = duty
+        v.duties[epochKey] = epochDuty
       else:
-        debug "Attester duty has been pruned", validator = key,
+        debug "Attester duties for the epoch has been pruned", validator = key,
               epoch = epochKey, loop = AttesterLoop
     attesters[key] = v
   vc.attesters = attesters
@@ -154,8 +185,39 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef) {.async.} =
       nextEpoch = currentEpoch + 1'u64
 
     if vc.attachedValidators.count() != 0:
-      await vc.pollForAttesterDuties(currentEpoch)
-      await vc.pollForAttesterDuties(nextEpoch)
+      var counts: array[2, tuple[epoch: Epoch, count: int]]
+      counts[0] = (currentEpoch, await vc.pollForAttesterDuties(currentEpoch))
+      counts[1] = (nextEpoch, await vc.pollForAttesterDuties(nextEpoch))
+
+      let subscriptions =
+        block:
+          var res: seq[RestCommitteeSubscription]
+          for item in counts:
+            if item.count > 0:
+              for duty in vc.attesterDutiesForEpoch(item.epoch):
+                if currentSlot + SUBSCRIPTION_BUFFER_SLOTS < duty.data.slot:
+                  let isAggregator =
+                    if duty.slotSig.isSome():
+                      is_aggregator(duty.data.committee_length,
+                                    duty.slotSig.get())
+                    else:
+                      false
+                  let sub = RestCommitteeSubscription(
+                    validator_index: duty.data.validator_index,
+                    committee_index: duty.data.committee_index,
+                    committees_at_slot: duty.data.committees_at_slot,
+                    slot: duty.data.slot,
+                    is_aggregator: isAggregator
+                  )
+                  res.add(sub)
+          res
+
+      if len(subscriptions) > 0:
+        let res = await vc.prepareBeaconCommitteeSubnet(subscriptions)
+        if not(res):
+          error "Failed to subscribe validators"
+
+    vc.pruneAttesterDuties(currentEpoch)
 
 proc getBlockProposers*(vc: ValidatorClientRef,
                         slot: Slot): HashSet[ValidatorPubKey] =
@@ -181,7 +243,7 @@ proc notifyBlockProductionService*(vc: ValidatorClientRef, slot: Slot,
   let event = BlockServiceEventRef(slot: slot, proposers: keys)
   await vc.blocksQueue.addLast(event)
 
-proc pruneBeaconProposers*(vc: ValidatorClientRef, epoch: Epoch) =
+proc pruneBeaconProposers(vc: ValidatorClientRef, epoch: Epoch) =
   var proposers: ProposerMap
   for epochKey, data in vc.proposers.pairs():
     if (epochKey + HISTORICAL_DUTIES_EPOCHS) >= epoch:
@@ -275,6 +337,7 @@ proc pollForBeaconProposers*(vc: ValidatorClientRef) {.async.} =
 
         await vc.notifyBlockProductionService(currentSlot,
                                               additionalProposers.toList())
+    vc.pruneBeaconProposers(currentEpoch)
 
 proc waitForNextSlot(service: DutiesServiceRef,
                      serviceLoop: DutiesServiceLoop) {.async.} =

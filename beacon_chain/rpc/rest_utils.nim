@@ -75,6 +75,8 @@ const
     "rejected"
   AggregateAndProofValidationSuccess* =
     "Aggregate and proof object(s) was broadcasted"
+  BeaconCommitteeSubscriptionSuccess* =
+    "Beacon node processed committee subscription request"
   InvalidParentRootValueError* =
     "Invalid parent root value"
   MissingSlotValueError* =

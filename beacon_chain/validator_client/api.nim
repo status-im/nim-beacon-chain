@@ -369,7 +369,7 @@ proc submitPoolAttestations*(vc: ValidatorClientRef,
   vc.untilSuccess(await submitPoolAttestations(it, data)):
     case response.status
     of 200:
-      debug "Received successfull response", endpoint = node
+      debug "Attestation was sucessfully published", endpoint = node
       return true
     of 400:
       debug "Received invalid request response",
@@ -416,7 +416,7 @@ proc publishAggregateAndProofs*(vc: ValidatorClientRef,
   vc.untilSuccess(await publishAggregateAndProofs(it, data)):
     case response.status:
     of 200:
-      debug "Received successfull response", endpoint = node
+      debug "Aggregate and proofs was sucessfully published", endpoint = node
       return true
     of 400:
       debug "Received invalid request response",
@@ -477,6 +477,36 @@ proc publishBlock*(vc: ValidatorClientRef,
             response_code = response.status, endpoint = node,
             response_error = response.getGenericErrorMessage()
       RestBeaconNodeStatus.Offline
+    of 500:
+      debug "Received internal error response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.Offline
+    of 503:
+      debug "Received not synced error response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.NotSynced
+    else:
+      debug "Received unexpected error response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      RestBeaconNodeStatus.Offline
+
+proc prepareBeaconCommitteeSubnet*(vc: ValidatorClientRef,
+                                   body: seq[RestCommitteeSubscription]
+                                  ): Future[bool] {.async.} =
+  logScope: request = "prepareBeaconCommitteeSubnet"
+  vc.untilSuccess(await prepareBeaconCommitteeSubnet(it, body)):
+    case response.status
+    of 200:
+      debug "Commitee subnet was successfully prepared", endpoint = node
+      return true
+    of 400:
+      debug "Received invalid request response",
+            response_code = response.status, endpoint = node,
+            response_error = response.getGenericErrorMessage()
+      return false
     of 500:
       debug "Received internal error response",
             response_code = response.status, endpoint = node,

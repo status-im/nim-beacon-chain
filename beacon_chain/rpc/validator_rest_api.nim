@@ -345,7 +345,9 @@ proc installValidatorApiHandlers*(router: var RestRouter, node: BeaconNode) =
         get_committee_count_per_slot(epochRef), request.slot,
         request.committee_index)
       )
-    return RestApiResponse.jsonError(Http500, NoImplementationError)
+    warn "Beacon committee subscription request served, but not implemented"
+    return RestApiResponse.jsonError(Http200,
+                                     BeaconCommitteeSubscriptionSuccess)
 
   router.redirect(
     MethodPost,
