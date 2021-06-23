@@ -149,7 +149,7 @@ proc publishAttestationsAndAggregates(service: AttestationServiceRef,
   await service.produceAndPublishAggregates(ad, duties)
 
 proc spawnAttestationTasks(service: AttestationServiceRef,
-                           slot: Slot) {.async.} =
+                           slot: Slot) =
   let vc = service.client
   let dutiesByCommittee =
     block:
@@ -172,7 +172,7 @@ proc mainLoop(service: AttestationServiceRef) {.async.} =
     let sres = vc.getCurrentSlot()
     if sres.isSome():
       let currentSlot = sres.get()
-      asyncSpawn service.spawnAttestationTasks(currentSlot)
+      service.spawnAttestationTasks(currentSlot)
     await sleepAsync(sleepTime)
 
 proc init*(t: typedesc[AttestationServiceRef],

@@ -27,9 +27,8 @@ proc publishBlock(service: BlockServiceRef,
 
   try:
     let randaoReveal = await validator.genRandaoReveal(fork, genesisRoot, slot)
-    debug "Randao", randao_reveal = randaoReveal
     let beaconBlock = await vc.produceBlock(slot, randaoReveal, graffiti)
-    debug "Block", non_signed_block = beaconBlock
+    let blockRoot = hash_tree_root(beaconBlock)
     var signedBlock = SignedBeaconBlock(message: beaconBlock,
                                         root: hash_tree_root(beaconBlock))
 
@@ -42,11 +41,10 @@ proc publishBlock(service: BlockServiceRef,
                      pubkey, slot, signing_root)
 
     if notSlashable.isOk():
-      signedBlock.signature = await validator.signBlockProposal(
-        fork, genesisRoot, slot, signedBlock.root)
-
-      debug "Signed block", signed_block = signedBlock
-
+      let signature = await validator.signBlockProposal(fork, genesisRoot, slot,
+                                                        blockRoot)
+      let signedBlock = SignedBeaconBlock(message: beaconBlock, root: blockRoot,
+                                          signature: signature)
       let res = await vc.publishBlock(signedBlock)
       if res:
         notice "Successfully published block",
