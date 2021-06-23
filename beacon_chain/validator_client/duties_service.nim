@@ -190,6 +190,9 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef) {.async.} =
       counts[0] = (currentEpoch, await vc.pollForAttesterDuties(currentEpoch))
       counts[1] = (nextEpoch, await vc.pollForAttesterDuties(nextEpoch))
 
+      if (counts[0].count == 0) and (counts[1].count == 0):
+        debug "No new attester's duties received", slot = currentSlot
+
       let subscriptions =
         block:
           var res: seq[RestCommitteeSubscription]

@@ -92,26 +92,6 @@ proc now*(c: BeaconClock): BeaconTime =
   ## Current time, in slots - this may end up being less than GENESIS_SLOT(!)
   toBeaconTime(c, getTime())
 
-proc durationToNextSlot*(c: BeaconClock): Duration =
-  let duration = Duration(c.now())
-  let timestamp = nanoseconds(duration)
-  if timestamp >= 0:
-    let nextSlot = Slot(uint64(seconds(duration)) div SECONDS_PER_SLOT) + 1'u64
-    seconds(int64(nextSlot * SECONDS_PER_SLOT)) - duration
-  else:
-    nanoseconds(-timestamp)
-
-proc durationToNextEpoch*(c: BeaconClock): Duration =
-  let duration = Duration(c.now())
-  let timestamp = nanoseconds(duration)
-  if timestamp >= 0:
-    let
-      currentSlot = Slot(uint64(seconds(duration)) div SECONDS_PER_SLOT)
-      nextSlot = compute_start_slot_at_epoch(currentSlot.epoch() + 1'u64)
-    seconds(int64(nextSlot * SECONDS_PER_SLOT)) - duration
-  else:
-    nanoseconds(-timestamp)
-
 proc fromNow*(c: BeaconClock, t: BeaconTime): tuple[inFuture: bool, offset: Duration] =
   let now = c.now()
   if t > now:
@@ -121,6 +101,20 @@ proc fromNow*(c: BeaconClock, t: BeaconTime): tuple[inFuture: bool, offset: Dura
 
 proc fromNow*(c: BeaconClock, slot: Slot): tuple[inFuture: bool, offset: Duration] =
   c.fromNow(slot.toBeaconTime())
+
+proc durationToNextSlot*(c: BeaconClock): Duration =
+  let (afterGenesis, slot) = c.now().toSlot()
+  if afterGenesis:
+    c.fromNow(Slot(slot) + 1'u64).offset
+  else:
+    c.fromNow(Slot(0)).offset
+
+proc durationToNextEpoch*(c: BeaconClock): Duration =
+  let (afterGenesis, slot) = c.now().toSlot()
+  if afterGenesis:
+    c.fromNow(compute_start_slot_at_epoch(slot.epoch() + 1'u64)).offset
+  else:
+    c.fromNow(compute_start_slot_at_epoch(Epoch(0))).offset
 
 func saturate*(d: tuple[inFuture: bool, offset: Duration]): Duration =
   if d.inFuture: d.offset else: seconds(0)
