@@ -3,16 +3,14 @@ import chronicles
 
 logScope: service = "block_service"
 
-proc publishBlock(service: BlockServiceRef,
-                  currentSlot, slot: Slot, pubkey: ValidatorPubKey) {.async.} =
+proc publishBlock(vc: ValidatorClientRef, currentSlot, slot: Slot,
+                  validator: AttachedValidator) {.async.} =
   logScope:
-    validator = pubkey
+    validator = validator.pubKey
     slot = slot
     wallSlot = currentSlot
 
   let
-    vc = service.client
-    validator = vc.attachedValidators.validators[pubkey]
     genesisRoot = vc.beaconGenesis.genesis_validators_root
     graffiti =
       if vc.config.graffiti.isSome():
@@ -21,7 +19,8 @@ proc publishBlock(service: BlockServiceRef,
         defaultGraffitiBytes()
     fork = vc.fork.get()
 
-  debug "Publishing block", validator = pubkey, genesis_root = genesisRoot,
+  debug "Publishing block", validator = validator.pubKey,
+                            genesis_root = genesisRoot,
                             graffiti = graffiti, fork = fork, slot = slot,
                             wall_slot = currentSlot
 
@@ -38,7 +37,7 @@ proc publishBlock(service: BlockServiceRef,
     let notSlashable = vc.attachedValidators
       .slashingProtection
       .registerBlock(ValidatorIndex(signedBlock.message.proposer_index),
-                     pubkey, slot, signing_root)
+                     validator.pubKey, slot, signing_root)
 
     if notSlashable.isOk():
       let signature = await validator.signBlockProposal(fork, genesisRoot, slot,
@@ -60,42 +59,117 @@ proc publishBlock(service: BlockServiceRef,
     error "Unexpected error happens while proposing block",
           error_name = exc.name, error_msg = exc.msg
 
-proc mainLoop(service: BlockServiceRef) {.async.} =
-  let vc = service.client
-  service.state = ServiceState.Running
-  while true:
-    let event = await vc.blocksQueue.popFirst()
+proc proposeBlock(vc: ValidatorClientRef, slot: Slot,
+                  proposerKey: ValidatorPubkey) {.async.} =
+  let (inFuture, timeToSleep) = vc.beaconClock.fromNow(slot)
+  try:
+    if inFuture:
+      debug "Proposing block", timeIn = timeToSleep, validator = proposerKey
+      await sleepAsync(timeToSleep)
+    else:
+      debug "Proposing block", timeIn = 0.seconds, validator = proposerKey
+
     let sres = vc.getCurrentSlot()
     if sres.isSome():
       let currentSlot = sres.get()
+      # We need to check that we still have validator in our pool.
+      let validator = vc.attachedValidators.getValidator(proposerKey)
+      if isNil(validator):
+        debug "Validator is not present in pool anymore, exiting",
+              validator = proposerKey
+        return
+      await vc.publishBlock(currentSlot, slot, validator)
 
-      let proposersList = event.proposers.mapIt($it).join(", ")
-      debug "Received event ", event_slot = event.slot,
-            event_proposers = "[" & proposersList & "]"
+  except CancelledError:
+    debug "Proposing task was cancelled", slot = slot, validator = proposerKey
 
-      if event.slot != currentSlot:
-        warn "Skipping block production for expired slot",
-             slot = event.slot, current_slot = currentSlot
-      else:
-        if event.slot == Slot(0):
-          debug "Not producing block at genesis slot",
-                proposers = len(event.proposers)
-        else:
-          doAssert(len(event.proposers) > 0, "Event must always has proposers")
-          let proposers = event.proposers
-          if len(proposers) > 1:
+
+proc spawnProposalTask(vc: ValidatorClientRef,
+                       duty: RestProposerDuty): ProposerTask =
+  let future = proposeBlock(vc, duty.slot, duty.pubkey)
+  ProposerTask(future: future, duty: duty)
+
+proc contains(data: openArray[RestProposerDuty], task: ProposerTask): bool =
+  for item in data:
+    if (item.pubkey == task.duty.pubkey) and (item.slot == task.duty.slot):
+      return true
+  false
+
+proc contains(data: openArray[ProposerTask], duty: RestProposerDuty): bool =
+  for item in data:
+    if (item.duty.pubkey == duty.pubkey) and (item.duty.slot == duty.slot):
+      return true
+  false
+
+proc addOrReplaceProposers*(vc: ValidatorClientRef, epoch: Epoch,
+                            dependentRoot: Eth2Digest,
+                            duties: openArray[RestProposerDuty]) =
+  let epochDuties = vc.proposers.getOrDefault(epoch)
+  if not(epochDuties.isDefault()):
+    if epochDuties.dependentRoot != dependentRoot:
+      warn "Proposer duties re-organization",
+           prior_dependent_root = epochDuties.dependentRoot,
+           dependent_root = dependentRoot
+      let tasks =
+        block:
+          var res: seq[ProposerTask]
+          var hashset = initHashSet[Slot]()
+
+          for task in epochDuties.duties:
+            if task notin duties:
+              # Task is no more relevant, so cancel it.
+              debug "Cancelling running proposal duty task",
+                    slot = task.duty.slot, validator = task.duty.pubkey
+              task.future.cancel()
+            else:
+              # If task is already running for proper slot, we keep it alive.
+              debug "Keep running previous proposal duty task",
+                    slot = task.duty.slot, validator = task.duty.pubkey
+              res.add(task)
+
+          for duty in duties:
+            if duty notin res:
+              debug "New proposal duty received", slot = duty.slot,
+                    validator = duty.pubkey
+              let task = vc.spawnProposalTask(duty)
+              if duty.slot in hashset:
+                error "Multiple block proposers for this slot, " &
+                      "producing blocks for all proposers", slot = duty.slot
+              else:
+                hashset.incl(duty.slot)
+              res.add(task)
+          res
+      vc.proposers[epoch] = ProposedData.init(epoch, dependentRoot, tasks)
+  else:
+    # Spawn new proposer tasks and modify proposers map.
+    let tasks =
+      block:
+        var hashset = initHashSet[Slot]()
+        var res: seq[ProposerTask]
+        for duty in duties:
+          debug "New proposal duty received", slot = duty.slot,
+                validator = duty.pubkey
+          let task = vc.spawnProposalTask(duty)
+          if duty.slot in hashset:
             error "Multiple block proposers for this slot, " &
-                  "producing blocks for all proposers",
-                  proposers_count = len(proposers), slot = event.slot
+                  "producing blocks for all proposers", slot = duty.slot
+          else:
+            hashset.incl(duty.slot)
+          res.add(task)
+        res
+    vc.proposers[epoch] = ProposedData.init(epoch, dependentRoot, tasks)
 
-          for pubkey in proposers:
-            asyncSpawn service.publishBlock(currentSlot, event.slot, pubkey)
-
-proc init*(t: typedesc[BlockServiceRef],
-           vc: ValidatorClientRef): Future[BlockServiceRef] {.async.} =
-  debug "Initializing service"
-  var res = BlockServiceRef(client: vc, state: ServiceState.Initialized)
-  return res
-
-proc start*(service: BlockServiceRef) =
-  service.lifeFut = mainLoop(service)
+proc waitForBlockPublished*(vc: ValidatorClientRef, slot: Slot) {.async.} =
+  ## This procedure will wait for all the block proposal tasks to be finished at
+  ## slot ``slot``
+  let pendingTasks =
+    block:
+      var res: seq[Future[void]]
+      let epochDuties = vc.proposers.getOrDefault(slot.epoch())
+      for task in epochDuties.duties:
+        if task.duty.slot == slot:
+          if not(task.future.finished()):
+            res.add(task.future)
+      res
+  if len(pendingTasks) > 0:
+    await allFutures(pendingTasks)

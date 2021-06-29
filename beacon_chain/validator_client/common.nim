@@ -24,7 +24,7 @@ export beacon_rest_api, node_rest_api, validator_rest_api, config_rest_api,
        beacon_clock,
        kvstore, kvstore_sqlite3,
        keystore_management, slashing_protection, validator_pool,
-       attestation_aggregation
+       attestation_aggregation, beacon_node_types
 
 const
   SYNC_TOLERANCE* = 4'u64
@@ -62,10 +62,14 @@ type
     data*: RestAttesterDuty
     slotSig*: Option[ValidatorSig]
 
+  ProposerTask* = object
+    duty*: RestProposerDuty
+    future*: Future[void]
+
   ProposedData* = object
     epoch*: Epoch
     dependentRoot*: Eth2Digest
-    duties*: seq[RestProposerDuty]
+    duties*: seq[ProposerTask]
 
   BeaconNodeServer* = object
     client*: RestClientRef
@@ -104,7 +108,7 @@ type
     attesters*: AttesterMap
     proposers*: ProposerMap
     beaconGenesis*: RestBeaconGenesis
-    blocksQueue*: AsyncQueue[BlockServiceEventRef]
+    proposerTasks*: Table[Slot, seq[ProposerTask]]
 
   ValidatorClientRef* = ref ValidatorClient
 
@@ -151,7 +155,7 @@ proc init*(t: typedesc[DutyAndProof], epoch: Epoch, dependentRoot: Eth2Digest,
                slotSig: slotSig)
 
 proc init*(t: typedesc[ProposedData], epoch: Epoch, dependentRoot: Eth2Digest,
-           data: openarray[RestProposerDuty]): ProposedData =
+           data: openarray[ProposerTask]): ProposedData =
   ProposedData(epoch: epoch, dependentRoot: dependentRoot, duties: @data)
 
 proc getCurrentSlot*(vc: ValidatorClientRef): Option[Slot] =
@@ -206,8 +210,8 @@ proc getDurationToNextBlock*(vc: ValidatorClientRef, slot: Slot): string =
     let data = vc.proposers.getOrDefault(epoch)
     if not(data.isDefault()):
       for item in data.duties:
-        if item.pubkey in vc.attachedValidators:
-          let proposalSlotTime = Duration(item.slot.toBeaconTime())
+        if item.duty.pubkey in vc.attachedValidators:
+          let proposalSlotTime = Duration(item.duty.slot.toBeaconTime())
           if proposalSlotTime >= currentSlotTime:
             let timeLeft = proposalSlotTime - currentSlotTime
             if timeLeft < minimumDuration:

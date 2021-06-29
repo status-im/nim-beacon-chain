@@ -1,6 +1,6 @@
 import std/[sets, sequtils]
 import chronicles
-import common, api
+import common, api, block_service
 
 logScope: service = "attestation_service"
 
@@ -134,9 +134,18 @@ proc publishAttestationsAndAggregates(service: AttestationServiceRef,
     # case it will return `ZeroDuration`.
     vc.beaconClock.durationToNextSlot() - seconds(int64(SECONDS_PER_SLOT) div 3)
 
+  # Waiting for blocks to be published before attesting.
+  # TODO (cheatfate): Here should be present timeout.
+  let startTime = Moment.now()
+  await vc.waitForBlockPublished(slot)
+  let finishTime = Moment.now()
+  debug "Block proposal awaited", slot = slot,
+                                  duration = (finishTime - startTime)
+
   block:
     let delay = vc.getDelay(seconds(int64(SECONDS_PER_SLOT) div 3))
     notice "Producing attestations", delay = delay
+
   let ad = await service.produceAndPublishAttestations(slot, committee_index,
                                                        duties)
 

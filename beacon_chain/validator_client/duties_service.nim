@@ -1,6 +1,6 @@
 import std/[sets, sequtils]
 import chronicles
-import common, api
+import common, api, block_service
 
 logScope: service = "duties_service"
 
@@ -223,30 +223,6 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef) {.async.} =
 
     vc.pruneAttesterDuties(currentEpoch)
 
-proc getBlockProposers*(vc: ValidatorClientRef,
-                        slot: Slot): HashSet[ValidatorPubKey] =
-  ## Creates HashSet of local validator's public keys which must propose the
-  ## block at specific slot ``slot``.
-  var hashset = initHashSet[ValidatorPubKey]()
-  let data = vc.proposers.getOrDefault(slot.epoch())
-  if not(data.isDefault()):
-    for item in data.duties:
-      if (item.slot == slot) and (item.pubkey in vc.attachedValidators) and
-         (item.pubkey notin hashset):
-        hashset.incl(item.pubkey)
-  hashset
-
-proc toList*(s: HashSet[ValidatorPubKey]): seq[ValidatorPubKey] =
-  var res = newSeqOfCap[ValidatorPubKey](len(s))
-  for item in s.items():
-    res.add(item)
-  res
-
-proc notifyBlockProductionService*(vc: ValidatorClientRef, slot: Slot,
-                                   keys: seq[ValidatorPubKey]) {.async.} =
-  let event = BlockServiceEventRef(slot: slot, proposers: keys)
-  await vc.blocksQueue.addLast(event)
-
 proc pruneBeaconProposers(vc: ValidatorClientRef, epoch: Epoch) =
   var proposers: ProposerMap
   for epochKey, data in vc.proposers.pairs():
@@ -258,89 +234,25 @@ proc pruneBeaconProposers(vc: ValidatorClientRef, epoch: Epoch) =
   vc.proposers = proposers
 
 proc pollForBeaconProposers*(vc: ValidatorClientRef) {.async.} =
-  ## Poll for the proposer duties for the current epoch and store them in
-  ## `DutiesServiceRef.proposers`.
-  ## If there are any proposer for this slot, send out a notification to the
-  ## `BlockServiceRef`.
-  ##
-  ## Note
-  ##
-  ## This function will potentially send *two* notifications to the
-  ## `BlockServiceRef`; it will send a notification initially, then it will
-  ## query beacon node for the latest duties and send a *second* notification
-  ## if those duties have changed. This behaviour simultaneously achieves the
-  ## following:
-  ##
-  ## 1. Block production can happen immediately and does not have to wait for
-  ##    the proposer duties to download.
-  ## 2. We won't miss a block if the duties for the current slot happen to
-  ##    change with this poll.
-  ##
-  ## This sounds great, but is it safe? Firstly, the additional notification
-  ## will only contain block producers that were not included in the first
-  ## notification. This should be safety enough. However, we also have the
-  ## slashing protection as a second line of defence. These two factors
-  ## provide an acceptable level of safety.
-  ##
-  ## It's important to note that since there is a 0-epoch look-ahead (i.e.,
-  ## no look-ahead) for block proposers then it's very likely that a proposal
-  ## for the first slot of the epoch will need go through the slow path every
-  ## time. I.e., the proposal will only happen after we've been able to
-  ## download and process the duties from the BN. This means it is very
-  ## important to ensure this function is as fast as possible.
   let sres = vc.getCurrentSlot()
   if sres.isSome():
     let
       currentSlot = sres.get()
       currentEpoch = currentSlot.epoch()
 
-    # Query cached proposers for current slot.
-    let initialProposers = vc.getBlockProposers(currentSlot)
-
-    if len(initialProposers) > 0:
-      info "Block proposers detected", slot = currentSlot,
-            validators_count = vc.attachedValidators.count(),
-            proposers_count = len(initialProposers)
-      # Notify the `BlockServiceRef` for any proposals that we have in our
-      # cache.
-      await vc.notifyBlockProductionService(currentSlot,
-                                            initialProposers.toList())
-
     if vc.attachedValidators.count() != 0:
-      # Only download duties and notify `BlockServiceRef` if we have some
-      # validators.
       let res = await vc.getProposerDuties(currentEpoch)
       let
         dependentRoot = res.dependent_root
         duties = res.data
         relevantDuties = duties.filterIt(it.pubkey in vc.attachedValidators)
-        propData = ProposedData.init(currentEpoch,
-                                     dependentRoot, relevantDuties)
+
       if len(relevantDuties) > 0:
-        let epochDuty = vc.proposers.getOrDefault(currentEpoch)
-        if not(epochDuty.isDefault()):
-          if epochDuty.dependentRoot != dependentRoot:
-            warn "Proposer duties re-organization",
-                 prior_dependent_root = epochDuty.dependentRoot,
-                 dependent_root = dependentRoot, loop = ProposerLoop
+        vc.addOrReplaceProposers(currentEpoch, dependentRoot, relevantDuties)
       else:
         debug "No relevant proposer duties received", slot = currentSlot,
               duties_count = len(duties)
-      vc.proposers[currentEpoch] = propData
 
-      # Compute the block proposers for this slot again, now that we've received
-      # an update from the beacon node. Then, compute the difference between two
-      # sets to obtain set of block proposers which were not included in the
-      # initial notification to `BlockServiceRef`.
-      let additionalProposers = difference(initialProposers,
-                                           vc.getBlockProposers(currentSlot))
-      if len(additionalProposers) > 0:
-        info "Additional block proposers detected", slot = currentSlot,
-              validators_count = vc.attachedValidators.count(),
-              proposers_count = len(additionalProposers)
-
-        await vc.notifyBlockProductionService(currentSlot,
-                                              additionalProposers.toList())
     vc.pruneBeaconProposers(currentEpoch)
 
 proc waitForNextSlot(service: DutiesServiceRef,

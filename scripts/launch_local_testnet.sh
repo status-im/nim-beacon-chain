@@ -466,6 +466,10 @@ fi
 dump_logtrace
 
 if [[ "${TIMEOUT_DURATION}" != "0" ]]; then
-  pkill -HUP -P ${WATCHER_PID}
+  if uname | grep -qiE "mingw|msys"; then
+    taskkill //F //PID ${WATCHER_PID}
+  else
+    pkill -HUP -P ${WATCHER_PID}
+  fi
 fi
 
