@@ -19,9 +19,13 @@ proc mainLoop(service: ForkServiceRef) {.async.} =
   service.state = ServiceState.Running
   let vc = service.client
   debug "Service started"
-  while true:
-    await vc.pollForFork()
-    await service.waitForNextEpoch()
+  try:
+    while true:
+      await vc.pollForFork()
+      await service.waitForNextEpoch()
+  except CatchableError as exc:
+    warn "Service crashed with unexpected error", err_name = exc.name,
+         err_msg = exc.msg
 
 proc init*(t: typedesc[ForkServiceRef],
             vc: ValidatorClientRef): Future[ForkServiceRef] {.async.} =

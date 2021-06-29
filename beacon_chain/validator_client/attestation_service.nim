@@ -19,9 +19,10 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
   doAssert(MAX_VALIDATORS_PER_COMMITTEE <= uint64(high(int)))
   let vc = service.client
   let ad = await vc.produceAttestationData(slot, committee_index)
-  let attestations =
+
+  let pendingAttestations =
     block:
-      var res: seq[Attestation]
+      var res: seq[Future[Attestation]]
       for duty in duties:
         debug "Serving attestation duty", duty = duty, epoch = slot.epoch()
         if (duty.slot != ad.slot) or
@@ -55,11 +56,24 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
                badVoteDetails = $notSlashable.error
           continue
 
-        let attestation = await validator.produceAndSignAttestation(ad,
+        let attestation = validator.produceAndSignAttestation(ad,
           int(duty.committee_length), Natural(duty.validator_committee_index),
           vc.fork.get(), vc.beaconGenesis.genesis_validators_root)
 
         res.add(attestation)
+      res
+
+  let attestations =
+    block:
+      var res: seq[Attestation]
+      await allFutures(pendingAttestations)
+      for future in pendingAttestations:
+        if future.done():
+          res.add(future.read())
+        elif future.failed():
+          let exc = future.readError()
+          warn "Attestation signature operation failed",
+               err_name = exc.name, err_msg = exc.msg
       res
 
   let count = len(attestations)
@@ -175,14 +189,18 @@ proc spawnAttestationTasks(service: AttestationServiceRef,
 proc mainLoop(service: AttestationServiceRef) {.async.} =
   let vc = service.client
   service.state = ServiceState.Running
-  while true:
-    let sleepTime = vc.beaconClock.durationToNextSlot() +
-                      seconds(int64(SECONDS_PER_SLOT) div 3)
-    let sres = vc.getCurrentSlot()
-    if sres.isSome():
-      let currentSlot = sres.get()
-      service.spawnAttestationTasks(currentSlot)
-    await sleepAsync(sleepTime)
+  try:
+    while true:
+      let sleepTime = vc.beaconClock.durationToNextSlot() +
+                        seconds(int64(SECONDS_PER_SLOT) div 3)
+      let sres = vc.getCurrentSlot()
+      if sres.isSome():
+        let currentSlot = sres.get()
+        service.spawnAttestationTasks(currentSlot)
+      await sleepAsync(sleepTime)
+  except CatchableError as exc:
+    warn "Service crashed with unexpected error", err_name = exc.name,
+         err_msg = exc.msg
 
 proc init*(t: typedesc[AttestationServiceRef],
            vc: ValidatorClientRef): Future[AttestationServiceRef] {.async.} =

@@ -352,14 +352,20 @@ for NUM_NODE in $(seq 0 $(( NUM_NODES - 1 ))); do
       scripts/makedir.sh "${VALIDATOR_DATA_DIR}/validators" 2>&1
       scripts/makedir.sh "${VALIDATOR_DATA_DIR}/secrets" 2>&1
       for VALIDATOR in $(ls "${VALIDATORS_DIR}" | tail -n +$(( $USER_VALIDATORS + ($VALIDATORS_PER_VALIDATOR * $NUM_NODE) + 1 + $VALIDATOR_OFFSET )) | head -n $VALIDATORS_PER_VALIDATOR); do
-        scripts/copyfile.sh "${VALIDATORS_DIR}/$VALIDATOR" "${VALIDATOR_DATA_DIR}/validators/" 2>&1
-        scripts/copyfile.sh "${SECRETS_DIR}/${VALIDATOR}" "${VALIDATOR_DATA_DIR}/secrets/" 2>&1
+        cp -a "${VALIDATORS_DIR}/${VALIDATOR}" "${VALIDATOR_DATA_DIR}/validators/" 2>&1
+        cp -a "${SECRETS_DIR}/${VALIDATOR}" "${VALIDATOR_DATA_DIR}/secrets/" 2>&1
       done
+      if [[ $OS = "Windows_NT" ]]; then
+        find "${VALIDATOR_DATA_DIR}" -type f \( -iname "*.json" -o ! -iname "*.*" \) -exec icacls "{}" /inheritance:r /grant:r ${USERDOMAIN}\\${USERNAME}:\(F\) \;
+      fi
     fi
     for VALIDATOR in $(ls "${VALIDATORS_DIR}" | tail -n +$(( $USER_VALIDATORS + ($VALIDATORS_PER_NODE * $NUM_NODE) + 1 )) | head -n $VALIDATORS_PER_NODE); do
-      scripts/copyfile.sh "${VALIDATORS_DIR}/$VALIDATOR" "${NODE_DATA_DIR}/validators/" 2>&1
-      scripts/copyfile.sh "${SECRETS_DIR}/${VALIDATOR}" "${NODE_DATA_DIR}/secrets/" 2>&1
+      cp -a "${VALIDATORS_DIR}/${VALIDATOR}" "${NODE_DATA_DIR}/validators/" 2>&1
+      cp -a "${SECRETS_DIR}/${VALIDATOR}" "${NODE_DATA_DIR}/secrets/" 2>&1
     done
+    if [[ $OS = "Windows_NT" ]]; then
+      find "${NODE_DATA_DIR}" -type f \( -iname "*.json" -o ! -iname "*.*" \) -exec icacls "{}" /inheritance:r /grant:r ${USERDOMAIN}\\${USERNAME}:\(F\) \;
+    fi
   fi
 done
 
@@ -472,4 +478,3 @@ if [[ "${TIMEOUT_DURATION}" != "0" ]]; then
     pkill -HUP -P ${WATCHER_PID}
   fi
 fi
-

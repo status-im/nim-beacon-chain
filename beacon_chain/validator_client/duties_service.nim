@@ -296,28 +296,33 @@ template checkAndRestart(serviceLoop: DutiesServiceLoop,
 proc mainLoop(service: DutiesServiceRef) {.async.} =
   service.state = ServiceState.Running
   let vc = service.client
-  var
-    fut1 = service.attesterDutiesLoop()
-    fut2 = service.proposerDutiesLoop()
-    fut3 = service.validatorIndexLoop()
 
-  while true:
-    var breakLoop = false
-    try:
-      discard await race(fut1, fut2, fut3)
-    except CancelledError:
-      if not(fut1.finished()): fut1.cancel()
-      if not(fut2.finished()): fut2.cancel()
-      if not(fut3.finished()): fut3.cancel()
-      await allFutures(fut1, fut2, fut3)
-      breakLoop = true
+  try:
+    var
+      fut1 = service.attesterDutiesLoop()
+      fut2 = service.proposerDutiesLoop()
+      fut3 = service.validatorIndexLoop()
 
-    if breakLoop:
-      break
+    while true:
+      var breakLoop = false
+      try:
+        discard await race(fut1, fut2, fut3)
+      except CancelledError:
+        if not(fut1.finished()): fut1.cancel()
+        if not(fut2.finished()): fut2.cancel()
+        if not(fut3.finished()): fut3.cancel()
+        await allFutures(fut1, fut2, fut3)
+        breakLoop = true
 
-    checkAndRestart(AttesterLoop, fut1, service.attesterDutiesLoop())
-    checkAndRestart(ProposerLoop, fut2, service.proposerDutiesLoop())
-    checkAndRestart(IndicesLoop, fut3, service.validatorIndexLoop())
+      if breakLoop:
+        break
+
+      checkAndRestart(AttesterLoop, fut1, service.attesterDutiesLoop())
+      checkAndRestart(ProposerLoop, fut2, service.proposerDutiesLoop())
+      checkAndRestart(IndicesLoop, fut3, service.validatorIndexLoop())
+  except CatchableError as exc:
+    warn "Service crashed with unexpected error", err_name = exc.name,
+         err_msg = exc.msg
 
 proc init*(t: typedesc[DutiesServiceRef],
            vc: ValidatorClientRef): Future[DutiesServiceRef] {.async.} =

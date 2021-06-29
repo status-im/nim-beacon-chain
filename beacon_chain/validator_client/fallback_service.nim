@@ -28,17 +28,22 @@ proc checkNodes*(service: FallbackServiceRef) {.async.} =
 
 proc mainLoop(service: FallbackServiceRef) {.async.} =
   service.state = ServiceState.Running
-  while true:
-    await service.checkNodes()
-    # Calculating time we need to sleep until `time(next_slot) - SLOT_LOOKAHEAD`
-    let waitTime =
-      block:
-        let nextTime = service.client.beaconClock.durationToNextSlot()
-        if nextTime < SLOT_LOOKAHEAD:
-          nextTime + seconds(int64(SECONDS_PER_SLOT))
-        else:
-          nextTime - SLOT_LOOKAHEAD
-    await sleepAsync(waitTime)
+  try:
+    while true:
+      await service.checkNodes()
+      # Calculating time we need to sleep until
+      # `time(next_slot) - SLOT_LOOKAHEAD`
+      let waitTime =
+        block:
+          let nextTime = service.client.beaconClock.durationToNextSlot()
+          if nextTime < SLOT_LOOKAHEAD:
+            nextTime + seconds(int64(SECONDS_PER_SLOT))
+          else:
+            nextTime - SLOT_LOOKAHEAD
+      await sleepAsync(waitTime)
+  except CatchableError as exc:
+    warn "Service crashed with unexpected error", err_name = exc.name,
+         err_msg = exc.msg
 
 proc init*(t: typedesc[FallbackServiceRef],
             vc: ValidatorClientRef): Future[FallbackServiceRef] {.async.} =
