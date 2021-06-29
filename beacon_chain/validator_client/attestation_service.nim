@@ -4,13 +4,6 @@ import common, api, block_service
 
 logScope: service = "attestation_service"
 
-proc getDelay*(vc: ValidatorClientRef, instant: Duration): Duration =
-  let currentBeaconTime = vc.beaconClock.now()
-  let currentTime = Duration(currentBeaconTime)
-  let slotStartTime = currentBeaconTime.slotOrZero().toBeaconTime()
-  let idealTime = Duration(slotStartTime) + instant
-  currentTime - idealTime
-
 proc produceAndPublishAttestations*(service: AttestationServiceRef,
                                     slot: Slot, committee_index: CommitteeIndex,
                                     duties: seq[RestAttesterDuty]

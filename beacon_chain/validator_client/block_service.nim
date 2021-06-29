@@ -20,6 +20,7 @@ proc publishBlock(vc: ValidatorClientRef, currentSlot, slot: Slot,
     fork = vc.fork.get()
 
   debug "Publishing block", validator = validator.pubKey,
+                            delay = vc.getDelay(ZeroDuration),
                             genesis_root = genesisRoot,
                             graffiti = graffiti, fork = fork, slot = slot,
                             wall_slot = currentSlot

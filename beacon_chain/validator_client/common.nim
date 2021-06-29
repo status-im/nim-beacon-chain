@@ -227,3 +227,10 @@ iterator attesterDutiesForEpoch*(vc: ValidatorClientRef,
     let epochDuties = item.duties.getOrDefault(epoch)
     if not(isDefault(epochDuties)):
       yield epochDuties
+
+proc getDelay*(vc: ValidatorClientRef, instant: Duration): Duration =
+  let currentBeaconTime = vc.beaconClock.now()
+  let currentTime = Duration(currentBeaconTime)
+  let slotStartTime = currentBeaconTime.slotOrZero().toBeaconTime()
+  let idealTime = Duration(slotStartTime) + instant
+  currentTime - idealTime
