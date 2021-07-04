@@ -203,6 +203,18 @@ proc slash_validator*(
 func genesis_time_from_eth1_timestamp*(cfg: RuntimeConfig, eth1_timestamp: uint64): uint64 =
   eth1_timestamp + cfg.GENESIS_DELAY
 
+func genesisFork*(cfg: RuntimeConfig): Fork =
+  Fork(
+    previous_version: cfg.GENESIS_FORK_VERSION,
+    current_version: cfg.GENESIS_FORK_VERSION,
+    epoch: GENESIS_EPOCH)
+
+func altairFork*(cfg: RuntimeConfig): Fork =
+  Fork(
+    previous_version: cfg.GENESIS_FORK_VERSION,
+    current_version: cfg.ALTAIR_FORK_VERSION,
+    epoch: cfg.ALTAIR_FORK_EPOCH)
+
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#genesis
 proc initialize_beacon_state_from_eth1*(
     cfg: RuntimeConfig,
@@ -227,10 +239,7 @@ proc initialize_beacon_state_from_eth1*(
   doAssert deposits.lenu64 >= SLOTS_PER_EPOCH
 
   var state = phase0.BeaconStateRef(
-    fork: Fork(
-      previous_version: cfg.GENESIS_FORK_VERSION,
-      current_version: cfg.GENESIS_FORK_VERSION,
-      epoch: GENESIS_EPOCH),
+    fork: genesisFork(cfg),
     genesis_time: genesis_time_from_eth1_timestamp(cfg, eth1_timestamp),
     eth1_data:
       Eth1Data(block_hash: eth1_block_hash, deposit_count: uint64(len(deposits))),
@@ -783,12 +792,7 @@ func translate_participation(
         state.previous_epoch_participation[index] =
           add_flag(state.previous_epoch_participation[index], flag_index)
 
-proc upgrade_to_altair*(pre: phase0.BeaconState): ref altair.BeaconState =
-  let epoch = get_current_epoch(pre)
-
-  # https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.8/specs/altair/fork.md#configuration
-  const ALTAIR_FORK_VERSION = Version [byte 1, 0, 0, 0]
-
+proc upgrade_to_altair*(cfg: RuntimeConfig, pre: phase0.BeaconState): ref altair.BeaconState =
   var
     empty_participation =
       HashList[ParticipationFlags, Limit VALIDATOR_REGISTRY_LIMIT]()
@@ -804,11 +808,7 @@ proc upgrade_to_altair*(pre: phase0.BeaconState): ref altair.BeaconState =
     genesis_time: pre.genesis_time,
     genesis_validators_root: pre.genesis_validators_root,
     slot: pre.slot,
-    fork: Fork(
-      previous_version: pre.fork.current_version,
-      current_version: ALTAIR_FORK_VERSION,
-      epoch: epoch
-    ),
+    fork: altairFork(cfg),
 
     # History
     latest_block_header: pre.latest_block_header,

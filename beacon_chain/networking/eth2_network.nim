@@ -1870,3 +1870,4 @@ func getStabilitySubnetLength*(node: Eth2Node): uint64 =
 
 func getRandomSubnetId*(node: Eth2Node): SubnetId =
   node.rng[].rand(ATTESTATION_SUBNET_COUNT - 1).SubnetId
+

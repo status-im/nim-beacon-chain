@@ -13,6 +13,8 @@ import
   ../spec/[crypto, datatypes/base, datatypes/altair, datatypes/phase0, digest],
   ../consensus_object_pools/block_pools_types
 
+from ../spec/datatypes/altair import SyncCommitteeMessage
+
 # Dump errors are generally not fatal where used currently - the code calling
 # these functions, like most code, is not exception safe
 template logErrors(body: untyped) =
@@ -45,3 +47,8 @@ proc dump*(dir: string, v: SomeHashedBeaconState) =
     SSZ.saveFile(
       dir / &"state-{v.data.slot}-{shortLog(v.root)}.ssz",
       v.data)
+
+proc dump*(dir: string, v: SyncCommitteeMessage, validator: ValidatorPubKey) =
+  logErrors:
+    SSZ.saveFile(dir / &"sync-committee-msg-{v.slot}-{shortLog(validator)}.ssz", v)
+

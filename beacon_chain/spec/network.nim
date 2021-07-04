@@ -68,10 +68,21 @@ func compute_subnet_for_attestation*(
     ATTESTATION_SUBNET_COUNT)
 
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/validator.md#broadcast-attestation
-func getAttestationTopic*(forkDigest: ForkDigest, subnet_id: SubnetId):
-    string =
+func getAttestationTopic*(forkDigest: ForkDigest,
+                          subnet_id: SubnetId): string =
   ## For subscribing and unsubscribing to/from a subnet.
   eth2Prefix(forkDigest) & "beacon_attestation_" & $uint64(subnet_id) & "/ssz"
+
+# https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.8/specs/altair/p2p-interface.md#topics-and-messages
+func getSyncCommitteeTopic*(forkDigest: ForkDigest,
+                            subnet_id: SubnetId): string =
+  ## For subscribing and unsubscribing to/from a subnet.
+  eth2Prefix(forkDigest) & "sync_committee_" & $uint64(subnet_id) & "/ssz"
+
+# https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.8/specs/altair/p2p-interface.md#topics-and-messages
+func getSyncCommitteeContributionAndProofTopic*(forkDigest: ForkDigest): string =
+  ## For subscribing and unsubscribing to/from a subnet.
+  eth2Prefix(forkDigest) & "sync_committee_contribution_and_proof" & "/ssz"
 
 func getENRForkID*(fork_version: Version,
                    genesis_validators_root: Eth2Digest): ENRForkID =

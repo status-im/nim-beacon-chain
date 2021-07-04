@@ -17,6 +17,11 @@ import
   ../beacon_node_types,
   ./slashing_protection
 
+from ../spec/datatypes/altair import
+  SyncCommitteeMessage,
+  SyncAggregatorSelectionData,
+  SignedContributionAndProof
+
 declareGauge validators,
   "Number of validators attached to the beacon node"
 
@@ -112,6 +117,65 @@ proc signAggregateAndProof*(v: AttachedValidator,
     let root = compute_aggregate_and_proof_root(
       fork, genesis_validators_root, aggregate_and_proof)
     await signWithRemoteValidator(v, root)
+
+# https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.7/specs/altair/validator.md#prepare-sync-committee-message
+proc signSyncCommitteeMessage*(v: AttachedValidator,
+                               slot: Slot,
+                               fork: Fork,
+                               genesis_validators_root: Eth2Digest,
+                               block_root: Eth2Digest): Future[SyncCommitteeMessage] {.async.} =
+  let
+    epoch = slot.epoch
+    domain = get_domain(fork, DOMAIN_SYNC_COMMITTEE, epoch, genesis_validators_root)
+    signing_root = compute_signing_root(block_root, domain)
+
+  let signature = if v.kind == inProcess:
+    blsSign(v.privkey, signing_root.data).toValidatorSig
+  else:
+    await signWithRemoteValidator(v, signing_root)
+
+  return SyncCommitteeMessage(
+    slot: slot,
+    beacon_block_root: block_root,
+    validator_index: v.index.get.uint64,
+    signature: signature)
+
+# https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.7/specs/altair/validator.md#aggregation-selection
+proc getSyncCommitteeSelectionProof*(
+    v: AttachedValidator,
+    fork: Fork,
+    genesis_validators_root: Eth2Digest,
+    slot: Slot,
+    subcommittee_index: uint64): Future[ValidatorSig] {.async.} =
+  let
+    domain = get_domain(fork, DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF,
+                        slot.epoch, genesis_validators_root)
+    signing_data = SyncAggregatorSelectionData(
+      slot: slot,
+      subcommittee_index: subcommittee_index)
+    signing_root = compute_signing_root(signing_data, domain)
+
+  let signature = if v.kind == inProcess:
+    blsSign(v.privkey, signing_root.data).toValidatorSig
+  else:
+    await signWithRemoteValidator(v, signing_root)
+
+# https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.7/specs/altair/validator.md#signature
+proc sign*(
+    v: AttachedValidator,
+    msg: ref SignedContributionAndProof,
+    fork: Fork,
+    genesis_validators_root: Eth2Digest) {.async.} =
+  let
+    domain = get_domain(fork, DOMAIN_CONTRIBUTION_AND_PROOF,
+                        msg.message.contribution.slot.epoch,
+                        genesis_validators_root)
+    signing_root = compute_signing_root(msg.message, domain)
+
+  msg.signature = if v.kind == inProcess:
+    blsSign(v.privkey, signing_root.data).toValidatorSig
+  else:
+    await signWithRemoteValidator(v, signing_root)
 
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/validator.md#randao-reveal
 func genRandaoReveal*(k: ValidatorPrivKey, fork: Fork,
