@@ -43,6 +43,7 @@ type
     dag*: ChainDAGRef
     quarantine*: QuarantineRef
     attestationPool*: ref AttestationPool
+    syncCommitteeMsgPool*: ref SyncCommitteeMsgPool
     exitPool*: ref ExitPool
     eth1Monitor*: Eth1Monitor
     rpcServer*: RpcServer
@@ -58,6 +59,7 @@ type
     blockProcessor*: ref BlockProcessor
     consensusManager*: ref ConsensusManager
     attachedValidatorBalanceTotal*: uint64
+    syncCommitteesUpdatedAt*: Option[Epoch]
 
 const
   MaxEmptySlotCount* = uint64(10*60) div SECONDS_PER_SLOT

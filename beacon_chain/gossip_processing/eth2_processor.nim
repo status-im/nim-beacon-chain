@@ -20,6 +20,10 @@ import
   ../beacon_node_types,
   ../beacon_clock, ../ssz/sszdump
 
+from ../spec/datatypes/altair import
+  SyncCommitteeMessage,
+  SignedContributionAndProof
+
 # Metrics for tracking attestation and beacon block loss
 declareCounter beacon_attestations_received,
   "Number of beacon chain attestations received by this peer"
@@ -66,6 +70,7 @@ type
     dag*: ChainDAGRef
     attestationPool*: ref AttestationPool
     validatorPool: ref ValidatorPool
+    syncCommitteeMsgPool: SyncCommitteeMsgPoolRef
 
     doppelgangerDetection*: DoppelgangerProtection
 
@@ -98,6 +103,7 @@ proc new*(T: type Eth2Processor,
           attestationPool: ref AttestationPool,
           exitPool: ref ExitPool,
           validatorPool: ref ValidatorPool,
+          syncCommitteeMsgPool: SyncCommitteeMsgPoolRef,
           quarantine: QuarantineRef,
           rng: ref BrHmacDrbgContext,
           getTime: GetTimeFn): ref Eth2Processor =
@@ -110,6 +116,7 @@ proc new*(T: type Eth2Processor,
     attestationPool: attestationPool,
     exitPool: exitPool,
     validatorPool: validatorPool,
+    syncCommitteeMsgPool: syncCommitteeMsgPool,
     quarantine: quarantine,
     getTime: getTime,
     batchCrypto: BatchCrypto.new(
@@ -344,3 +351,38 @@ proc voluntaryExitValidator*(
   beacon_voluntary_exits_received.inc()
 
   ValidationResult.Accept
+
+proc syncCommitteeMsgValidator*(
+    self: ref Eth2Processor,
+    syncCommitteeMsg: SyncCommitteeMessage,
+    subnet_id: SubnetId,
+    checkSignature: bool = true): ValidationResult =
+  let wallTime = self.getCurrentBeaconTime()
+
+  # Now proceed to validation
+  let v = validateSyncCommitteeMessage(self.dag, self.syncCommitteeMsgPool,
+                                       syncCommitteeMsg, subnet_id, wallTime,
+                                       checkSignature)
+  if v.isErr():
+    debug "Dropping sync committee message", validationError = v.error
+    return v.error[0]
+
+  ValidationResult.Accept
+
+proc syncCommitteeContributionValidator*(
+    self: ref Eth2Processor,
+    contributionAndProof: SignedContributionAndProof,
+    checkSignature: bool = true): ValidationResult =
+  let wallTime = self.getCurrentBeaconTime()
+
+  # Now proceed to validation
+  let v = validateSignedContributionAndProof(self.dag, self.syncCommitteeMsgPool,
+                                             contributionAndProof, wallTime,
+                                             checkSignature)
+  if v.isErr():
+    debug "Dropping sync committee contribution and proof",
+           validationError = v.error
+    return v.error[0]
+
+  ValidationResult.Accept
+

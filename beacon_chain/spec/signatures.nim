@@ -209,3 +209,51 @@ proc verify_voluntary_exit_signature*(
       signing_root = compute_signing_root(voluntary_exit, domain)
 
     blsVerify(pubkey, signing_root.data, signature)
+
+proc verify_sync_committee_message_signature*(
+    msg: SyncCommitteeMessage | SyncCommitteeContribution,
+    fork: Fork,
+    genesis_validators_root: Eth2Digest,
+    pubkey: ValidatorPubKey | CookedPubKey): bool =
+  let
+    domain = get_domain(
+      fork, DOMAIN_SYNC_COMMITTEE, msg.slot.epoch, genesis_validators_root)
+    signing_root = compute_signing_root(msg.beacon_block_root, domain)
+
+  blsVerify(pubkey, signing_root.data, msg.signature)
+
+# https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.7/specs/altair/validator.md#aggregation-selection
+proc is_sync_committee_aggregator*(signature: ValidatorSig): bool =
+  let
+    signatureDigest = eth2digest(signature.blob)
+    modulo = max(1'u64, (SYNC_COMMITTEE_SIZE div SYNC_COMMITTEE_SUBNET_COUNT) div TARGET_AGGREGATORS_PER_SYNC_SUBCOMMITTEE)
+  bytes_to_uint64(signatureDigest.data.toOpenArray(0, 7)) mod modulo == 0
+
+proc verify_signed_contribution_and_proof_signature*(
+    msg: SignedContributionAndProof,
+    fork: Fork,
+    genesis_validators_root: Eth2Digest,
+    pubkey: ValidatorPubKey | CookedPubKey): bool =
+  let
+    domain = get_domain(
+      fork, DOMAIN_CONTRIBUTION_AND_PROOF, msg.message.contribution.slot.epoch, genesis_validators_root)
+    signing_root = compute_signing_root(msg.message, domain)
+
+  blsVerify(pubkey, signing_root.data, msg.signature)
+
+proc verify_selection_proof_signature*(
+    msg: ContributionAndProof,
+    fork: Fork,
+    genesis_validators_root: Eth2Digest,
+    pubkey: ValidatorPubKey | CookedPubKey): bool =
+  let
+    slot = msg.contribution.slot
+    domain = get_domain(
+      fork, DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF, slot.epoch, genesis_validators_root)
+    signing_data = SyncAggregatorSelectionData(
+      slot: slot,
+      subcommittee_index: msg.contribution.subcommittee_index)
+    signing_root = compute_signing_root(signing_data, domain)
+
+  blsVerify(pubkey, signing_root.data, msg.selection_proof)
+
