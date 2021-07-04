@@ -1,0 +1,60 @@
+#!/bin/bash
+
+set -e
+adduser --system --no-create-home --group nimbus
+chown nimbus:nimbus /var/lib/nimbus
+
+dialog_user() {
+  exec 3>&1
+
+  NETWORK_DIALOG=(dialog --keep-tite --title "Eth2 Network" --menu "Select Eth2 Network for Nimbus:" 22 76 16)
+  OPTIONS=(mainnet "Mainnet"
+    pyrmont "Pyrmont Testnet"
+    prater "Prater Testnet"
+  )
+  NETWORK=$("${NETWORK_DIALOG[@]}" "${OPTIONS[@]}" 2>&1 >/dev/tty)
+
+  WEB3_HELP="To monitor the Eth1 validator deposit contract, you'll need to pair the Nimbus beacon node with a Web3 provider capable of serving Eth1 event logs. This could be a locally running Eth1 client such as Geth or a cloud service such as Infura. For more information please see our setup guides:
+
+https://status-im.github.io/nimbus-eth2/eth1.html
+
+Note: please make sure the provider is compatible with the Eth2 Network selected in the previous step (${NETWORK})."
+
+  WEB3_URL=$(dialog --title "Eth1 Web3 Provider" \
+    --clear \
+    --inputbox "${WEB3_HELP}" 20 110 2>&1 1>&3)
+
+  # check for empty Web3 Provider
+  if [ -z $WEB3_URL ]; then
+    echo "You didn't provide any Eth1 Web3 Provider.
+You should fix this by editing /usr/lib/systemd/system/nimbus.service and setting proper value on WEB3_URL."
+  fi
+
+  # check for Web3 Provider URL prefixes (https:// or wss://)
+  if [[ !( -z $WEB3_URL ) && !( $WEB3_URL =~ ^https\:\/\/.* || $WEB3_URL =~ ^wss\:\/\/.* ) ]]; then
+    echo "You provided an invalid Eth1 Web3 Provider. This might lead to unexpected behavior on Nimbus.
+You should fix this by editing /usr/lib/systemd/system/nimbus.service and setting proper value on WEB3_URL"
+  fi
+
+  echo "Environment=NETWORK=${NETWORK}
+Environment=WEB3_URL=${WEB3_URL}
+" >>/usr/lib/systemd/system/nimbus.service
+}
+
+while true; do
+  read -p "Do you want to be assisted in the configuration of the Nimbus SystemD Service? y/n " yn
+  case $yn in
+  [Yy]*)
+    dialog_user
+    break
+    ;;
+  [Nn]*)
+    echo "Warning: you must manually edit /usr/lib/systemd/system/nimbus.service and setting proper values on NETWORK and WEB3_URL."
+    echo "Environment=NETWORK=mainnet
+Environment=WEB3_URL=
+" >>/usr/lib/systemd/system/nimbus.service
+    exit
+    ;;
+  *) echo "Please answer yes or no." ;;
+  esac
+done

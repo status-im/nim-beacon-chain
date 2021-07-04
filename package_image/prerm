@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -e
+if (systemctl is-active --quiet nimbus.service)
+	then
+	systemctl stop nimbus.service
+	systemctl disable nimbus.service
+fi
