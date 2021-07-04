@@ -455,6 +455,9 @@ proc init*(T: type ChainDAGRef,
 
   dag
 
+template genesisValidatorsRoot*(dag: ChainDAGRef): Eth2Digest =
+  getStateField(dag.headState.data, genesis_validators_root)
+
 func getEpochRef*(
     dag: ChainDAGRef, state: StateData, cache: var StateCache): EpochRef =
   let
@@ -544,6 +547,12 @@ func stateCheckpoint*(bs: BlockSlot): BlockSlot =
   while not isStateCheckPoint(bs):
     bs = bs.parentOrSlot
   bs
+
+proc forkAtSlot*(dag: ChainDAGRef, slot: Slot): Fork =
+  if slot < dag.altairTransitionSlot:
+    genesisFork(dag.runtimePreset)
+  else:
+    altairFork(dag.runtimePreset, dag.altairTransitionSlot.epoch)
 
 proc forkDigestAtSlot*(dag: ChainDAGRef, slot: Slot): ForkDigest =
   if slot < dag.altairTransitionSlot:
@@ -952,6 +961,28 @@ proc pruneBlocksDAG(dag: ChainDAGRef) =
     currentCandidateHeads = dag.heads.len,
     prunedHeads = hlen - dag.heads.len,
     dagPruneDur = Moment.now() - startTick
+
+func isSyncCommitteeMember*(blockRef: BlockRef,
+                            committeeIdx: SubnetId,
+                            validatorIdx: uint64): bool =
+  # TODO
+  true
+
+template syncCommitteeParticipants*(blockRef: BlockRef): openarray[ValidatorIndex] =
+  newSeq[ValidatorIndex]()
+
+template syncCommitteeParticipants*(
+    blockRef: BlockRef,
+    committeeIdx: SubnetId): openarray[ValidatorIndex] =
+  newSeq[ValidatorIndex]()
+
+iterator syncCommitteeParticipants*(
+    blockRef: BlockRef,
+    committeeIdx: SubnetId,
+    aggregationBits: SyncCommitteeAggregationBits): ValidatorIndex =
+  for pos, valIdx in syncCommitteeParticipants(blockRef, committeeIdx):
+    if aggregationBits[pos]:
+      yield valIdx
 
 func needStateCachesAndForkChoicePruning*(dag: ChainDAGRef): bool =
   dag.lastPrunePoint != dag.finalizedHead

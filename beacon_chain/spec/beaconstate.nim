@@ -268,6 +268,18 @@ proc slash_validator*(state: var SomeBeaconState, slashed_index: ValidatorIndex,
 func genesis_time_from_eth1_timestamp*(preset: RuntimePreset, eth1_timestamp: uint64): uint64 =
   eth1_timestamp + preset.GENESIS_DELAY
 
+func genesisFork*(preset: RuntimePreset): Fork =
+  Fork(
+    previous_version: preset.GENESIS_FORK_VERSION,
+    current_version: preset.GENESIS_FORK_VERSION,
+    epoch: GENESIS_EPOCH)
+
+func altairFork*(preset: RuntimePreset, epoch: Epoch): Fork =
+  Fork(
+    previous_version: preset.GENESIS_FORK_VERSION,
+    current_version: preset.ALTAIR_FORK_VERSION,
+    epoch: epoch)
+
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/beacon-chain.md#genesis
 proc initialize_beacon_state_from_eth1*(
     preset: RuntimePreset,
@@ -292,10 +304,7 @@ proc initialize_beacon_state_from_eth1*(
   doAssert deposits.lenu64 >= SLOTS_PER_EPOCH
 
   var state = phase0.BeaconStateRef(
-    fork: Fork(
-      previous_version: preset.GENESIS_FORK_VERSION,
-      current_version: preset.GENESIS_FORK_VERSION,
-      epoch: GENESIS_EPOCH),
+    fork: genesisFork(preset),
     genesis_time: genesis_time_from_eth1_timestamp(preset, eth1_timestamp),
     eth1_data:
       Eth1Data(block_hash: eth1_block_hash, deposit_count: uint64(len(deposits))),
@@ -852,6 +861,7 @@ proc upgrade_to_altair*(pre: phase0.BeaconState): ref altair.BeaconState =
   let epoch = get_current_epoch(pre)
 
   # https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.8/specs/altair/fork.md#configuration
+  # TODO: This should be read from a RuntimePreset
   const ALTAIR_FORK_VERSION = Version [byte 1, 0, 0, 0]
 
   var
@@ -869,6 +879,8 @@ proc upgrade_to_altair*(pre: phase0.BeaconState): ref altair.BeaconState =
     genesis_time: pre.genesis_time,
     genesis_validators_root: pre.genesis_validators_root,
     slot: pre.slot,
+    # TODO: Use the `altairFork` function
+    #      (this would require a RuntimePreset to reach here)
     fork: Fork(
       previous_version: pre.fork.current_version,
       current_version: ALTAIR_FORK_VERSION,
