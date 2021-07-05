@@ -4,7 +4,13 @@ import chronicles
 logScope: service = "fork_service"
 
 proc pollForFork(vc: ValidatorClientRef) {.async.} =
-  let fork = await vc.getHeadStateFork()
+  let fork =
+    try:
+      await vc.getHeadStateFork()
+    except ValidatorApiError as exc:
+      error "Unable to retrieve head state's fork", reason = exc.msg
+      return
+
   if vc.fork.isNone() or vc.fork.get() != fork:
     vc.fork = some(fork)
     notice "Fork update success", fork = fork

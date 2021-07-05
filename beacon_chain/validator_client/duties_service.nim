@@ -45,7 +45,13 @@ proc pollForValidatorIndices*(vc: ValidatorClientRef) {.async.} =
           inc(k)
         res
 
-    let res = await vc.getValidators(idents)
+    let res =
+      try:
+        await vc.getValidators(idents)
+      except ValidatorApiError as exc:
+        error "Unable to retrieve head state's validator information"
+        return
+
     for item in res:
       validators.add(item)
 
@@ -85,7 +91,12 @@ proc pollForAttesterDuties*(vc: ValidatorClientRef,
           inc(k)
         res
 
-    let res = await vc.getAttesterDuties(epoch, indices)
+    let res =
+      try:
+        await vc.getAttesterDuties(epoch, indices)
+      except ValidatorApiError as exc:
+        error "Unable to retrieve attester duties", epoch = epoch
+        return 0
 
     if currentRoot.isNone():
       # First request
@@ -241,17 +252,21 @@ proc pollForBeaconProposers*(vc: ValidatorClientRef) {.async.} =
       currentEpoch = currentSlot.epoch()
 
     if vc.attachedValidators.count() != 0:
-      let res = await vc.getProposerDuties(currentEpoch)
-      let
-        dependentRoot = res.dependent_root
-        duties = res.data
-        relevantDuties = duties.filterIt(it.pubkey in vc.attachedValidators)
+      try:
+        let res = await vc.getProposerDuties(currentEpoch)
+        let
+          dependentRoot = res.dependent_root
+          duties = res.data
+          relevantDuties = duties.filterIt(it.pubkey in vc.attachedValidators)
 
-      if len(relevantDuties) > 0:
-        vc.addOrReplaceProposers(currentEpoch, dependentRoot, relevantDuties)
-      else:
-        debug "No relevant proposer duties received", slot = currentSlot,
-              duties_count = len(duties)
+        if len(relevantDuties) > 0:
+          vc.addOrReplaceProposers(currentEpoch, dependentRoot, relevantDuties)
+        else:
+          debug "No relevant proposer duties received", slot = currentSlot,
+                duties_count = len(duties)
+      except ValidatorApiError as exc:
+        debug "Unable to retrieve proposer duties", slot = currentSlot,
+              epoch = currentEpoch
 
     vc.pruneBeaconProposers(currentEpoch)
 

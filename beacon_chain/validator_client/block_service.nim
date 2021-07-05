@@ -27,7 +27,13 @@ proc publishBlock(vc: ValidatorClientRef, currentSlot, slot: Slot,
 
   try:
     let randaoReveal = await validator.genRandaoReveal(fork, genesisRoot, slot)
-    let beaconBlock = await vc.produceBlock(slot, randaoReveal, graffiti)
+    let beaconBlock =
+      try:
+        await vc.produceBlock(slot, randaoReveal, graffiti)
+      except ValidatorApiError as exc:
+        error "Unable to retrieve block data", slot = currentSlot,
+              validator = validator.pubKey
+        return
     let blockRoot = hash_tree_root(beaconBlock)
     var signedBlock = SignedBeaconBlock(message: beaconBlock,
                                         root: hash_tree_root(beaconBlock))

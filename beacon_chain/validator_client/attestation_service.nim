@@ -11,6 +11,9 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
      async.} =
   doAssert(MAX_VALIDATORS_PER_COMMITTEE <= uint64(high(int)))
   let vc = service.client
+
+  # This call could raise ValidatorApiError, but it is handled in
+  # publishAttestationsAndAggregates().
   let ad = await vc.produceAttestationData(slot, committee_index)
 
   let pendingAttestations =
@@ -90,7 +93,12 @@ proc produceAndPublishAggregates(service: AttestationServiceRef,
     attestationRoot = adata.hash_tree_root()
     genesisRoot = vc.beaconGenesis.genesis_validators_root
 
-  let aggAttestation = await vc.getAggregatedAttestation(slot, attestationRoot)
+  let aggAttestation =
+    try:
+      await vc.getAggregatedAttestation(slot, attestationRoot)
+    except ValidatorApiError as exc:
+      error "Unable to retrieve aggregated attestation data"
+      return
 
   let aggregateAndProofs =
     block:
@@ -153,8 +161,13 @@ proc publishAttestationsAndAggregates(service: AttestationServiceRef,
     let delay = vc.getDelay(seconds(int64(SECONDS_PER_SLOT) div 3))
     notice "Producing attestations", delay = delay
 
-  let ad = await service.produceAndPublishAttestations(slot, committee_index,
-                                                       duties)
+  let ad =
+    try:
+      await service.produceAndPublishAttestations(slot, committee_index,
+                                                  duties)
+    except ValidatorApiError as exc:
+      error "Unable to proceed attestations"
+      return
 
   if aggregateTime != ZeroDuration:
     await sleepAsync(aggregateTime)

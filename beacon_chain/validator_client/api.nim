@@ -1,5 +1,11 @@
 import common
 
+type
+  ApiResponse*[T] = Result[T, string]
+  ApiOperation = enum
+    Success, Timeout, Failure, Interrupt
+
+
 proc checkCompatible*(vc: ValidatorClientRef,
                       node: BeaconNodeServerRef) {.async.} =
   logScope: endpoint = node
@@ -146,198 +152,421 @@ proc checkNode*(vc: ValidatorClientRef,
     return
   await vc.checkSync(node)
 
-template untilSuccess*(vc: ValidatorClientRef, body: untyped,
-                       handlers: untyped): untyped =
+proc checkNodes*(vc: ValidatorClientRef,
+                 nodeStatuses: set[RestBeaconNodeStatus]) {.async.} =
+  doAssert(RestBeaconNodeStatus.Online notin nodeStatuses)
+  let nodesToCheck =
+    vc.beaconNodes.filterIt(it.status in nodeStatuses)
+  let pending =
+    block:
+      var res: seq[Future[void]]
+      for node in nodesToCheck:
+        res.add(vc.checkNode(node))
+      res
+  if len(pending) > 0:
+    try:
+      await allFutures(pending)
+    except CancelledError as exc:
+      # allFutures() did not cancel passed Futures, so we need to send
+      # cancellation to all the children.
+      for fut in pending:
+        if not(fut.finished()):
+          fut.cancel()
+      await allFutures(pending)
+      raise exc
+
+template onceToAll*(vc: ValidatorClientRef, responseType: typedesc,
+                    timeout: Duration, body: untyped,
+                    handlers: untyped): untyped =
   var it {.inject.}: RestClientRef
-  type ResType = typeof(body)
-  var mainres: ResType
+  var operationResult {.inject.}: bool = false
+  type BodyType = typeof(body)
+
+  let onlineNodes =
+    vc.beaconNodes.filterIt(it.status == RestBeaconNodeStatus.Online)
+
+  if len(onlineNodes) > 0:
+    var pending =
+      block:
+        var res: seq[BodyType]
+        for node {.inject.} in onlineNodes:
+          it = node.client
+          it = node.client
+          let fut = body
+          res.add(fut)
+        res
+
+    let opres =
+      try:
+        await allFutures(pending).wait(timeout)
+        ApiOperation.Success
+      except AsyncTimeoutError:
+        ApiOperation.Timeout
+      except CancelledError:
+        ApiOperation.Interrupt
+
+    for idx, node {.inject.} in onlineNodes.pairs():
+      it = node.client
+      let apiResponse {.inject.} =
+        block:
+          let fut = pending[idx]
+          if fut.finished():
+            if fut.failed() or fut.cancelled():
+              let exc = fut.readError()
+              ApiResponse[responseType].err("[" & $exc.name & "] " & $exc.msg)
+            else:
+              ApiResponse[responseType].ok(fut.read())
+          else:
+            case opres
+            of ApiOperation.Interrupt:
+              fut.cancel()
+              onlineNodes[idx].status = RestBeaconNodeStatus.Offline
+              ApiResponse[responseType].err("Operation interrupted")
+            of ApiOperation.Timeout:
+              fut.cancel()
+              onlineNodes[idx].status = RestBeaconNodeStatus.Offline
+              ApiResponse[responseType].err("Operation timeout exceeded")
+            of ApiOperation.Success, ApiOperation.Failure:
+              # This should not be happened, because all Futures should be
+              # finished, and `Failure` processed when Future is finished.
+              ApiResponse[responseType].err("Unexpected error")
+
+      node.status = handlers
+      if node.status == RestBeaconNodeStatus.Online:
+        operationResult = true
+
+template firstSuccessTimeout*(vc: ValidatorClientRef, respType: typedesc,
+                              timeout: Duration, body: untyped,
+                              handlers: untyped): untyped =
+  doAssert(timeout != ZeroDuration)
+  var it {.inject.}: RestClientRef
+
+  var timerFut =
+    if timeout != InfiniteDuration:
+      sleepAsync(timeout)
+    else:
+      nil
+
+  var iterationsCount = 0
+
   while true:
-    var retryErrorNodes: seq[BeaconNodeServerRef]
-    var retryNonsyncNodes: seq[BeaconNodeServerRef]
+    let onlineNodes =
+      vc.beaconNodes.filterIt(it.status == RestBeaconNodeStatus.Online)
 
-    for node {.inject.} in vc.beaconNodes:
-      case node.status
-      of RestBeaconNodeStatus.Online:
-        it = node.client
-        let optresp =
+    if iterationsCount != 0:
+      debug "Request got failed", iterations_count = iterationsCount
+
+    var exitNow = false
+
+    for node {.inject.} in onlineNodes:
+      it = node.client
+      var bodyFut = body
+
+      let resOp =
+        block:
+          if isNil(timerFut):
+            try:
+              # We use `allFutures()` to keep result in `bodyFut`, but still
+              # be able to check errors.
+              await allFutures(bodyFut)
+              ApiOperation.Success
+            except CancelledError:
+              # `allFutures()` could not cancel Futures.
+              await bodyFut.cancelAndWait()
+              ApiOperation.Interrupt
+            except CatchableError as exc:
+              # This only could happened if `allFutures()` start raise
+              # exceptions.
+              ApiOperation.Failure
+          else:
+            try:
+              discard await race(bodyFut, timerFut)
+              if bodyFut.finished():
+                ApiOperation.Success
+              else:
+                await bodyFut.cancelAndWait()
+                ApiOperation.Timeout
+            except CancelledError:
+              # `race()` could not cancel Futures.
+              if not(bodyFut.finished()):
+                if not(timerFut.finished()):
+                  timerFut.cancel()
+                await allFutures(bodyFut.cancelAndWait(), timerFut)
+              else:
+                await cancelAndWait(timerFut)
+              ApiOperation.Interrupt
+            except CatchableError as exc:
+              # This only could happened if `race()` start raise exceptions.
+              ApiOperation.Failure
+
+      block:
+        let apiResponse {.inject.} =
+          block:
+            if bodyFut.finished():
+              if bodyFut.failed() or bodyFut.cancelled():
+                let exc = bodyFut.readError()
+                ApiResponse[respType].err("[" & $exc.name & "] " & $exc.msg)
+              else:
+                ApiResponse[respType].ok(bodyFut.read())
+            else:
+              case resOp
+              of ApiOperation.Interrupt:
+                ApiResponse[respType].err("Operation was interrupted")
+              of ApiOperation.Timeout:
+                ApiResponse[respType].err("Operation timeout exceeded")
+              of ApiOperation.Success, ApiOperation.Failure:
+                # This should not be happened, because all Futures should be
+                # finished, and `Failure` processed when Future is finished.
+                ApiResponse[respType].err("Unexpected error")
+
+        let status =
           try:
-            let res = body
-            some(res)
-          except CancelledError as exc:
-            debug "Received interrupt", endpoint = node
-            node.status = RestBeaconNodeStatus.Offline
-            raise exc
-          except RestError as exc:
-            var m {.used.} = exc
-            debug "Communication error", error_name = exc.name,
-                  error_msg = exc.msg, endpoint = node
-            node.status = RestBeaconNodeStatus.Offline
-            none[ResType]()
-          except CatchableError as exc:
-            var m {.used.} = exc
-            debug "Unexpected exception", error_name = exc.name,
-                  error_msg = exc.msg, endpoint = node
-            node.status = RestBeaconNodeStatus.Offline
-            raiseAssert "Error happens"
-            # none[ResType]()
+            handlers
+          except CatchableError:
+            raiseAssert("Response handler must not raise exceptions")
 
-        if optresp.isSome():
-          let response {.inject.} = optresp.get()
-          let status = handlers
-          debug "Handler returned status", status = status
-          case status
-            of RestBeaconNodeStatus.Uninitalized, RestBeaconNodeStatus.Offline:
-              retryErrorNodes.add(node)
-            of RestBeaconNodeStatus.NotSynced:
-              retryNonsyncNodes.add(node)
-            of RestBeaconNodeStatus.Incompatible, RestBeaconNodeStatus.Online:
-              discard
-          node.status = status
-        else:
-          retryErrorNodes.add(node)
-      of RestBeaconNodeStatus.Uninitalized, RestBeaconNodeStatus.Offline:
-        retryErrorNodes.add(node)
-      of RestBeaconNodeStatus.NotSynced:
-        retryNonsyncNodes.add(node)
-      of RestBeaconNodeStatus.Incompatible:
-        # We are not going to repeat requests to incompatible beacon node.
-        discard
+        node.status = status
+
+      if resOp == ApiOperation.Success:
+        if node.status == RestBeaconNodeStatus.Online:
+          exitNow = true
+          break
+      else:
+        exitNow = true
+        break
+
+    if exitNow:
+      break
+
+    let offlineMask = {RestBeaconNodeStatus.Offline,
+                       RestBeaconNodeStatus.NotSynced,
+                       RestBeaconNodeStatus.Uninitalized}
+    let offlineNodes = vc.beaconNodes.filterIt(it.status in offlineMask)
 
     warn "There no beacon nodes available, refreshing nodes status",
-         retry_error_nodes_count = len(retryErrorNodes),
-         retry_nonsync_nodes_count = len(retryNonsyncNodes)
+         online_nodes = len(onlineNodes), offline_nodes = len(offlineNodes)
 
-    for item in retryErrorNodes:
-      try:
-        await vc.checkNode(item)
-      except CancelledError as exc:
-        debug "Received interrupt", endpoint = item
-        item.status = RestBeaconNodeStatus.Offline
-        raise exc
+    var checkFut = vc.checkNodes(offlineMask)
 
-    await sleepAsync(1.seconds)
+    let checkOp =
+      block:
+        var dontRushFut = sleepAsync(500.milliseconds)
+        if isNil(timerFut):
+          try:
+            # We use `allFutures()` to keep result in `checkFut`, but still
+            # be able to check errors.
+            await allFutures(checkFut, dontRushFut)
+            ApiOperation.Success
+          except CancelledError:
+            # `allFutures()` could not cancel Futures.
+            if not(checkFut.finished()):
+              checkFut.cancel()
+            if not(dontRushFut.finished()):
+              dontRushFut.cancel()
+            await allFutures(checkFut, dontRushFut)
+            ApiOperation.Interrupt
+          except CatchableError as exc:
+            # This only could happened if `race()` or `allFutures()` start raise
+            # exceptions.
+            ApiOperation.Failure
+        else:
+          try:
+            discard await race(allFutures(checkFut, dontRushFut), timerFut)
+            if checkFut.finished():
+              ApiOperation.Success
+            else:
+              checkFut.cancel()
+              if not(dontRushFut.finished()):
+                dontRushFut.cancel()
+              await allFutures(checkFut, dontRushFut)
+              ApiOperation.Timeout
+          except CancelledError:
+            # `race()` and `allFutures()` could not cancel Futures.
+            if not(timerFut.finished()):
+              timerFut.cancel()
+            if not(dontRushFut.finished()):
+              dontRushFut.cancel()
+            if not(checkFut.finished()):
+              checkFut.cancel()
+            await allFutures(checkFut, dontRushFut, timerFut)
+            ApiOperation.Interrupt
+          except CatchableError as exc:
+            # This only could happened if `race` or `allFutures` start raise
+            # exceptions.
+            ApiOperation.Failure
+
+    if checkOp != ApiOperation.Success:
+      exitNow = true
+      break
 
 proc getProposerDuties*(vc: ValidatorClientRef,
                         epoch: Epoch): Future[DataRestProposerDuties] {.
      async.} =
   logScope: request = "getProposerDuties"
-  vc.untilSuccess(await getProposerDuties(it, epoch)):
-    case response.status
-    of 200:
-      debug "Received successfull response", endpoint = node
-      return response.data
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node
+  vc.firstSuccessTimeout(RestResponse[DataRestProposerDuties], SlotDuration,
+                         getProposerDuties(it, epoch)):
+    if apiResponse.isErr():
+      debug "Unable to retrieve proposer duties", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
-    of 503:
-      debug "Received not synced error response",
-            response_code = 503, endpoint = node
-      RestBeaconNodeStatus.NotSynced
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status
+      of 200:
+        debug "Received successfull response", endpoint = node
+        return response.data
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 503:
+        debug "Received not synced error response",
+              response_code = 503, endpoint = node
+        RestBeaconNodeStatus.NotSynced
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+
+  raise newException(ValidatorApiError, "Unable to retrieve proposer duties")
 
 proc getAttesterDuties*(vc: ValidatorClientRef, epoch: Epoch,
                         validators: seq[ValidatorIndex]
                        ): Future[DataRestAttesterDuties] {.async.} =
   logScope: request = "getAttesterDuties"
-  vc.untilSuccess(await getAttesterDuties(it, epoch, validators)):
-    case response.status
-    of 200:
-      debug "Received successfull response", endpoint = node
-      return response.data
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node
+  vc.firstSuccessTimeout(RestResponse[DataRestAttesterDuties], SlotDuration,
+                         getAttesterDuties(it, epoch, validators)):
+    if apiResponse.isErr():
+      debug "Unable to retrieve attester duties", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
-    of 503:
-      debug "Received not synced error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.NotSynced
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status
+      of 200:
+        debug "Received successfull response", endpoint = node
+        return response.data
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 503:
+        debug "Received not synced error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.NotSynced
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+
+  raise newException(ValidatorApiError, "Unable to retrieve attester duties")
 
 proc getHeadStateFork*(vc: ValidatorClientRef): Future[Fork] {.async.} =
   logScope: request = "getHeadStateFork"
   let stateIdent = StateIdent.init(StateIdentType.Head)
-  vc.untilSuccess(await getStateFork(it, stateIdent)):
-    case response.status
-    of 200:
-      debug "Received successfull response", endpoint = node
-      return response.data.data
-    of 400, 404:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node
+  vc.firstSuccessTimeout(RestResponse[DataRestFork], SlotDuration,
+                         getStateFork(it, stateIdent)):
+    if apiResponse.isErr():
+      debug "Unable to retrieve head state's fork", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status
+      of 200:
+        debug "Received successfull response", endpoint = node
+        return response.data.data
+      of 400, 404:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+
+  raise newException(ValidatorApiError, "Unable to retrieve head state's fork")
 
 proc getValidators*(vc: ValidatorClientRef,
                     id: seq[ValidatorIdent]): Future[seq[RestValidator]] {.
      async.} =
   logScope: request = "getStateValidators"
   let stateIdent = StateIdent.init(StateIdentType.Head)
-  vc.untilSuccess(await getStateValidators(it, stateIdent, id)):
-    case response.status
-    of 200:
-      debug "Received successfull response", endpoint = node
-      return response.data.data
-    of 400, 404:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node
+  vc.firstSuccessTimeout(RestResponse[DataRestValidatorList], SlotDuration,
+                         getStateValidators(it, stateIdent, id)):
+    if apiResponse.isErr():
+      debug "Unable to retrieve head state's validator information",
+            endpoint = node, error = apiResponse.error()
       RestBeaconNodeStatus.Offline
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status
+      of 200:
+        debug "Received successfull response", endpoint = node
+        return response.data.data
+      of 400, 404:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+
+  raise newException(ValidatorApiError,
+                     "Unable to retrieve head state's validator information")
 
 proc produceAttestationData*(vc: ValidatorClientRef,  slot: Slot,
                              committee_index: CommitteeIndex
                             ): Future[AttestationData] {.async.} =
   logScope: request = "produceAttestationData"
-  vc.untilSuccess(await produceAttestationData(it, slot, committee_index)):
-    case response.status
-    of 200:
-      debug "Received successfull response", endpoint = node
-      return response.data.data
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node
+  vc.firstSuccessTimeout(RestResponse[DataRestAttestationData],
+                         OneThirdDuration,
+                         produceAttestationData(it, slot, committee_index)):
+    if apiResponse.isErr():
+      debug "Unable to retrieve attestation data", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
-    of 503:
-      debug "Received not synced error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.NotSynced
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status
+      of 200:
+        debug "Received successfull response", endpoint = node
+        return response.data.data
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 503:
+        debug "Received not synced error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.NotSynced
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+
+  raise newException(ValidatorApiError, "Unable to retrieve attestation data")
 
 proc getAttestationErrorMessage(response: RestPlainResponse): string =
   let res = decodeBytes(RestAttestationError, response.data,
@@ -366,159 +595,225 @@ proc submitPoolAttestations*(vc: ValidatorClientRef,
                              data: seq[Attestation]): Future[bool] {.
      async.} =
   logScope: request = "submitPoolAttestations"
-  vc.untilSuccess(await submitPoolAttestations(it, data)):
-    case response.status
-    of 200:
-      debug "Attestation was sucessfully published", endpoint = node
-      return true
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getAttestationErrorMessage()
-      RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getAttestationErrorMessage()
+  vc.onceToAll(RestPlainResponse, SlotDuration,
+               submitPoolAttestations(it, data)):
+    if apiResponse.isErr():
+      debug "Unable to deliver attestation", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getAttestationErrorMessage()
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status
+      of 200:
+        debug "Attestation was sucessfully published", endpoint = node
+        RestBeaconNodeStatus.Online
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getAttestationErrorMessage()
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getAttestationErrorMessage()
+        RestBeaconNodeStatus.Offline
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getAttestationErrorMessage()
+        RestBeaconNodeStatus.Offline
+
+  # `operationResult` is injected by `onceToAll()` template.
+  if operationResult:
+    return true
 
 proc getAggregatedAttestation*(vc: ValidatorClientRef, slot: Slot,
                                root: Eth2Digest): Future[Attestation] {.
      async.} =
   logScope: request = "getAggregatedAttestation"
-  vc.untilSuccess(await getAggregatedAttestation(it, root, slot)):
-    case response.status:
-    of 200:
-      debug "Received successfull response", endpoint = node
-      return response.data.data
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node
+  vc.firstSuccessTimeout(RestResponse[DataRestAttestation],
+                         OneThirdDuration,
+                         getAggregatedAttestation(it, root, slot)):
+    if apiResponse.isErr():
+      debug "Unable to retrieve aggregated attestation data", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status:
+      of 200:
+        debug "Received successfull response", endpoint = node
+        return response.data.data
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+
+  raise newException(ValidatorApiError,
+                     "Unable to retrieve aggregated attestation data")
 
 proc publishAggregateAndProofs*(vc: ValidatorClientRef,
                             data: seq[SignedAggregateAndProof]): Future[bool] {.
      async.} =
   logScope: request = "publishAggregateAndProofs"
-  vc.untilSuccess(await publishAggregateAndProofs(it, data)):
-    case response.status:
-    of 200:
-      debug "Aggregate and proofs was sucessfully published", endpoint = node
-      return true
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
-      RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
+  vc.onceToAll(RestPlainResponse, SlotDuration,
+               publishAggregateAndProofs(it, data)):
+    if apiResponse.isErr():
+      debug "Unable to deliver aggregate and proofs", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status:
+      of 200:
+        debug "Aggregate and proofs was sucessfully published", endpoint = node
+        return true
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.Offline
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.Offline
+
+  # `operationResult` is injected by `onceToAll()` template.
+  if operationResult:
+    return true
 
 proc produceBlock*(vc: ValidatorClientRef, slot: Slot,
                    randao_reveal: ValidatorSig,
                    graffiti: GraffitiBytes): Future[BeaconBlock] {.
      async.} =
   logScope: request = "produceBlock"
-  vc.untilSuccess(await produceBlock(it, slot, randao_reveal, graffiti)):
-    case response.status:
-    of 200:
-      debug "Received successfull response", endpoint = node
-      return response.data.data
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node
+  vc.firstSuccessTimeout(RestResponse[DataRestBeaconBlock],
+                         SlotDuration,
+                         produceBlock(it, slot, randao_reveal, graffiti)):
+    if apiResponse.isErr():
+      debug "Unable to retrieve block data", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
-    of 503:
-      debug "Received not synced error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.NotSynced
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status:
+      of 200:
+        debug "Received successfull response", endpoint = node
+        return response.data.data
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+      of 503:
+        debug "Received not synced error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.NotSynced
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node
+        RestBeaconNodeStatus.Offline
+
+  raise newException(ValidatorApiError, "Unable to retrieve block data")
 
 proc publishBlock*(vc: ValidatorClientRef,
                    data: SignedBeaconBlock): Future[bool] {.async.} =
   logScope: request = "produceBlock"
-  vc.untilSuccess(await publishBlock(it, data)):
-    case response.status:
-    of 200:
-      debug "Block was successfully published", endpoint = node
-      return true
-    of 202:
-      debug "Block not passed validation, but still published", endpoint = node
-      return true
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
+
+  vc.onceToAll(RestPlainResponse, SlotDuration, publishBlock(it, data)):
+    if apiResponse.isErr():
+      debug "Unable to deliver block", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
-      RestBeaconNodeStatus.Offline
-    of 503:
-      debug "Received not synced error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
-      RestBeaconNodeStatus.NotSynced
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status:
+      of 200:
+        debug "Block was successfully published", endpoint = node
+        return true
+      of 202:
+        debug "Block not passed validation, but still published",
+              endpoint = node
+        return true
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.Offline
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.Offline
+      of 503:
+        debug "Received not synced error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.NotSynced
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.Offline
+
+  # `operationResult` is injected by `onceToAll()` template.
+  if operationResult:
+    return true
 
 proc prepareBeaconCommitteeSubnet*(vc: ValidatorClientRef,
-                                   body: seq[RestCommitteeSubscription]
+                                   data: seq[RestCommitteeSubscription]
                                   ): Future[bool] {.async.} =
   logScope: request = "prepareBeaconCommitteeSubnet"
-  vc.untilSuccess(await prepareBeaconCommitteeSubnet(it, body)):
-    case response.status
-    of 200:
-      debug "Commitee subnet was successfully prepared", endpoint = node
-      return true
-    of 400:
-      debug "Received invalid request response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
-      return false
-    of 500:
-      debug "Received internal error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
+  vc.onceToAll(RestPlainResponse, OneThirdDuration,
+               prepareBeaconCommitteeSubnet(it, data)):
+    if apiResponse.isErr():
+      debug "Unable to prepare committee subnet", endpoint = node,
+            error = apiResponse.error()
       RestBeaconNodeStatus.Offline
-    of 503:
-      debug "Received not synced error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
-      RestBeaconNodeStatus.NotSynced
     else:
-      debug "Received unexpected error response",
-            response_code = response.status, endpoint = node,
-            response_error = response.getGenericErrorMessage()
-      RestBeaconNodeStatus.Offline
+      let response = apiResponse.get()
+      case response.status
+      of 200:
+        debug "Commitee subnet was successfully prepared", endpoint = node
+        return true
+      of 400:
+        debug "Received invalid request response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        return false
+      of 500:
+        debug "Received internal error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.Offline
+      of 503:
+        debug "Received not synced error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.NotSynced
+      else:
+        debug "Received unexpected error response",
+              response_code = response.status, endpoint = node,
+              response_error = response.getGenericErrorMessage()
+        RestBeaconNodeStatus.Offline
+
+  # `operationResult` is injected by `onceToAll()` template.
+  if operationResult:
+    return true
