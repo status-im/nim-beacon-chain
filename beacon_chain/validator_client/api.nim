@@ -5,7 +5,6 @@ type
   ApiOperation = enum
     Success, Timeout, Failure, Interrupt
 
-
 proc checkCompatible*(vc: ValidatorClientRef,
                       node: BeaconNodeServerRef) {.async.} =
   logScope: endpoint = node
@@ -595,10 +594,10 @@ proc submitPoolAttestations*(vc: ValidatorClientRef,
                              data: seq[Attestation]): Future[bool] {.
      async.} =
   logScope: request = "submitPoolAttestations"
-  vc.onceToAll(RestPlainResponse, SlotDuration,
-               submitPoolAttestations(it, data)):
+  vc.firstSuccessTimeout(RestPlainResponse, SlotDuration,
+                         submitPoolAttestations(it, data)):
     if apiResponse.isErr():
-      debug "Unable to deliver attestation", endpoint = node,
+      debug "Unable to submit attestation", endpoint = node,
             error = apiResponse.error()
       RestBeaconNodeStatus.Offline
     else:
@@ -606,7 +605,7 @@ proc submitPoolAttestations*(vc: ValidatorClientRef,
       case response.status
       of 200:
         debug "Attestation was sucessfully published", endpoint = node
-        RestBeaconNodeStatus.Online
+        return true
       of 400:
         debug "Received invalid request response",
               response_code = response.status, endpoint = node,
@@ -623,9 +622,7 @@ proc submitPoolAttestations*(vc: ValidatorClientRef,
               response_error = response.getAttestationErrorMessage()
         RestBeaconNodeStatus.Offline
 
-  # `operationResult` is injected by `onceToAll()` template.
-  if operationResult:
-    return true
+  raise newException(ValidatorApiError, "Unable to submit attestation")
 
 proc getAggregatedAttestation*(vc: ValidatorClientRef, slot: Slot,
                                root: Eth2Digest): Future[Attestation] {.
@@ -664,10 +661,10 @@ proc publishAggregateAndProofs*(vc: ValidatorClientRef,
                             data: seq[SignedAggregateAndProof]): Future[bool] {.
      async.} =
   logScope: request = "publishAggregateAndProofs"
-  vc.onceToAll(RestPlainResponse, SlotDuration,
-               publishAggregateAndProofs(it, data)):
+  vc.firstSuccessTimeout(RestPlainResponse, SlotDuration,
+                         publishAggregateAndProofs(it, data)):
     if apiResponse.isErr():
-      debug "Unable to deliver aggregate and proofs", endpoint = node,
+      debug "Unable to publish aggregate and proofs", endpoint = node,
             error = apiResponse.error()
       RestBeaconNodeStatus.Offline
     else:
@@ -692,14 +689,12 @@ proc publishAggregateAndProofs*(vc: ValidatorClientRef,
               response_error = response.getGenericErrorMessage()
         RestBeaconNodeStatus.Offline
 
-  # `operationResult` is injected by `onceToAll()` template.
-  if operationResult:
-    return true
+  raise newException(ValidatorApiError,
+                     "Unable to publish aggregate and proofs")
 
 proc produceBlock*(vc: ValidatorClientRef, slot: Slot,
                    randao_reveal: ValidatorSig,
-                   graffiti: GraffitiBytes): Future[BeaconBlock] {.
-     async.} =
+                   graffiti: GraffitiBytes): Future[BeaconBlock] {.async.} =
   logScope: request = "produceBlock"
   vc.firstSuccessTimeout(RestResponse[DataRestBeaconBlock],
                          SlotDuration,
@@ -735,11 +730,11 @@ proc produceBlock*(vc: ValidatorClientRef, slot: Slot,
 
 proc publishBlock*(vc: ValidatorClientRef,
                    data: SignedBeaconBlock): Future[bool] {.async.} =
-  logScope: request = "produceBlock"
-
-  vc.onceToAll(RestPlainResponse, SlotDuration, publishBlock(it, data)):
+  logScope: request = "publishBlock"
+  vc.firstSuccessTimeout(RestPlainResponse,
+                         SlotDuration, publishBlock(it, data)):
     if apiResponse.isErr():
-      debug "Unable to deliver block", endpoint = node,
+      debug "Unable to publish block", endpoint = node,
             error = apiResponse.error()
       RestBeaconNodeStatus.Offline
     else:
@@ -773,16 +768,14 @@ proc publishBlock*(vc: ValidatorClientRef,
               response_error = response.getGenericErrorMessage()
         RestBeaconNodeStatus.Offline
 
-  # `operationResult` is injected by `onceToAll()` template.
-  if operationResult:
-    return true
+  raise newException(ValidatorApiError, "Unable to publish block")
 
 proc prepareBeaconCommitteeSubnet*(vc: ValidatorClientRef,
                                    data: seq[RestCommitteeSubscription]
                                   ): Future[bool] {.async.} =
   logScope: request = "prepareBeaconCommitteeSubnet"
-  vc.onceToAll(RestPlainResponse, OneThirdDuration,
-               prepareBeaconCommitteeSubnet(it, data)):
+  vc.firstSuccessTimeout(RestPlainResponse, OneThirdDuration,
+                         prepareBeaconCommitteeSubnet(it, data)):
     if apiResponse.isErr():
       debug "Unable to prepare committee subnet", endpoint = node,
             error = apiResponse.error()
@@ -814,6 +807,4 @@ proc prepareBeaconCommitteeSubnet*(vc: ValidatorClientRef,
               response_error = response.getGenericErrorMessage()
         RestBeaconNodeStatus.Offline
 
-  # `operationResult` is injected by `onceToAll()` template.
-  if operationResult:
-    return true
+  raise newException(ValidatorApiError, "Unable to prepare committee subnet")

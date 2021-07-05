@@ -4,6 +4,57 @@ import common, api, block_service
 
 logScope: service = "attestation_service"
 
+proc serveAttestation(service: AttestationServiceRef, adata: AttestationData,
+                      duty: RestAttesterDuty): Future[bool] {.async.} =
+  let vc = service.client
+  let validator = vc.attachedValidators.getValidator(duty.pubkey)
+  if validator.index.isNone():
+    warn "Validator index is missing", validator = validator.pubKey
+    return false
+
+  let fork = vc.fork.get()
+
+  # TODO: signing_root is recomputed in signBlockProposal just after,
+  # but not for locally attached validators.
+  let signingRoot =
+    compute_attestation_root(fork, vc.beaconGenesis.genesis_validators_root,
+                             adata)
+
+  let vindex = validator.index.get()
+  let notSlashable = vc.attachedValidators.slashingProtection
+                       .registerAttestation(vindex, validator.pubKey,
+                                            adata.source.epoch,
+                                            adata.target.epoch, signingRoot)
+  if notSlashable.isErr():
+    warn "Slashing protection activated for attestation", slot = duty.slot,
+         validator = validator.pubKey, validator_index = duty.validator_index,
+         badVoteDetails = $notSlashable.error
+    return false
+
+  let attestation = await validator.produceAndSignAttestation(adata,
+    int(duty.committee_length), Natural(duty.validator_committee_index),
+    fork, vc.beaconGenesis.genesis_validators_root)
+
+  let res =
+    try:
+      await vc.submitPoolAttestations(@[attestation])
+    except ValidatorApiError as exc:
+      error "Unable to submit attestation", slot = duty.slot,
+        validator = validator.pubKey, validator_index = duty.validator_index
+      raise exc
+
+  let delay = vc.getDelay(seconds(int64(SECONDS_PER_SLOT) div 3))
+  if res:
+    notice "Attestation published", validator = validator.pubKey,
+           validator_index = duty.validator_index, slot = duty.slot,
+           delay = delay
+    return true
+  else:
+    warn "Attestation was not accepted by beacon node",
+         validator = validator.pubKey, validator_index = duty.validator_index,
+         slot = duty.slot, delay = delay
+    return false
+
 proc produceAndPublishAttestations*(service: AttestationServiceRef,
                                     slot: Slot, committee_index: CommitteeIndex,
                                     duties: seq[RestAttesterDuty]
@@ -18,7 +69,7 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
 
   let pendingAttestations =
     block:
-      var res: seq[Future[Attestation]]
+      var res: seq[Future[bool]]
       for duty in duties:
         debug "Serving attestation duty", duty = duty, epoch = slot.epoch()
         if (duty.slot != ad.slot) or
@@ -28,59 +79,36 @@ proc produceAndPublishAttestations*(service: AttestationServiceRef,
                 duty_index = duty.committee_index,
                 attestation_slot = ad.slot, attestation_index = ad.index
           continue
-
-        let validator = vc.attachedValidators.getValidator(duty.pubkey)
-
-        if validator.index.isNone():
-          warn "Validator index is missing", validator = validator.pubKey
-          continue
-
-        # TODO: signing_root is recomputed in signBlockProposal just after,
-        # but not for locally attached validators.
-        let signing_root =
-          compute_attestation_root(vc.fork.get(),
-                                   vc.beaconGenesis.genesis_validators_root,
-                                   ad)
-
-        let vindex = validator.index.get()
-        let notSlashable = vc.attachedValidators.slashingProtection
-          .registerAttestation(vindex, validator.pubKey,
-                               ad.source.epoch, ad.target.epoch, signing_root)
-        if notSlashable.isErr():
-          warn "Slashing protection activated for attestation",
-               validator = validator.pubKey,
-               badVoteDetails = $notSlashable.error
-          continue
-
-        let attestation = validator.produceAndSignAttestation(ad,
-          int(duty.committee_length), Natural(duty.validator_committee_index),
-          vc.fork.get(), vc.beaconGenesis.genesis_validators_root)
-
-        res.add(attestation)
+        res.add(service.serveAttestation(ad, duty))
       res
 
-  let attestations =
+  let statistics =
     block:
-      var res: seq[Attestation]
-      await allFutures(pendingAttestations)
+      var errored, succeed, failed = 0
+      try:
+        await allFutures(pendingAttestations)
+      except CancelledError:
+        for fut in pendingAttestations:
+          if not(fut.finished()):
+            fut.cancel()
+        await allFutures(pendingAttestations)
+
       for future in pendingAttestations:
         if future.done():
-          res.add(future.read())
-        elif future.failed():
-          let exc = future.readError()
-          warn "Attestation signature operation failed",
-               err_name = exc.name, err_msg = exc.msg
-      res
+          if future.read():
+            inc(succeed)
+          else:
+            inc(failed)
+        else:
+          inc(errored)
+      (succeed, errored, failed)
 
-  let count = len(attestations)
-  if count > 0:
-    let res = await vc.submitPoolAttestations(attestations)
-    if res:
-      notice "Successfully published attestations", count = count
-    else:
-      warn "Failed to publish attestations", count = count
-  else:
-    warn "No attestations produced"
+  let delay = vc.getDelay(seconds(int64(SECONDS_PER_SLOT) div 3))
+  debug "Attestation statistics", total = len(pendingAttestations),
+         succeed = statistics[0], failed_to_deliver = statistics[1],
+         not_accepted = statistics[2], delay = delay, slot = slot,
+         committee_index = committeeIndex, duties_count = len(duties)
+
   return ad
 
 proc produceAndPublishAggregates(service: AttestationServiceRef,
@@ -96,7 +124,7 @@ proc produceAndPublishAggregates(service: AttestationServiceRef,
   let aggAttestation =
     try:
       await vc.getAggregatedAttestation(slot, attestationRoot)
-    except ValidatorApiError as exc:
+    except ValidatorApiError:
       error "Unable to retrieve aggregated attestation data"
       return
 
@@ -131,11 +159,16 @@ proc produceAndPublishAggregates(service: AttestationServiceRef,
 
   let count = len(aggregateAndProofs)
   if count > 0:
-    let res = await vc.publishAggregateAndProofs(aggregateAndProofs)
+    let res =
+      try:
+        await vc.publishAggregateAndProofs(aggregateAndProofs)
+      except ValidatorApiError:
+        warn "Unable to publish aggregate and proofs"
+        return
     if res:
       notice "Successfully published aggregate and proofs", count = count
     else:
-      warn "Failed to publish aggregate and proofs", count = count
+      warn "Aggregate and proofs not accepted by beacon node", count = count
   else:
     warn "No aggregate and proofs produced"
 
@@ -159,13 +192,15 @@ proc publishAttestationsAndAggregates(service: AttestationServiceRef,
 
   block:
     let delay = vc.getDelay(seconds(int64(SECONDS_PER_SLOT) div 3))
-    notice "Producing attestations", delay = delay
+    notice "Producing attestations", delay = delay, slot = slot,
+                                     committee_index = committee_index,
+                                     duties_count = len(duties)
 
   let ad =
     try:
       await service.produceAndPublishAttestations(slot, committee_index,
                                                   duties)
-    except ValidatorApiError as exc:
+    except ValidatorApiError:
       error "Unable to proceed attestations"
       return
 

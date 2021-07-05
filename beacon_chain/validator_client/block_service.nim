@@ -51,16 +51,32 @@ proc publishBlock(vc: ValidatorClientRef, currentSlot, slot: Slot,
                                                         blockRoot)
       let signedBlock = SignedBeaconBlock(message: beaconBlock, root: blockRoot,
                                           signature: signature)
-      let res = await vc.publishBlock(signedBlock)
+      let res =
+        try:
+          await vc.publishBlock(signedBlock)
+        except ValidatorApiError:
+          error "Unable to submit block", slot = currentSlot,
+            validator = validator.pubKey, block_root = blockRoot,
+            deposits = len(signedBlock.message.body.deposits),
+            attestations = len(signedBlock.message.body.attestations),
+            graffiti = graffiti
+          return
       if res:
-        notice "Successfully published block",
+        notice "Block published", slot = currentSlot,
+          validator = validator.pubKey, validator_index = validator.index.get(),
           deposits = len(signedBlock.message.body.deposits),
           attestations = len(signedBlock.message.body.attestations),
           graffiti = graffiti
       else:
-        warn "Failed to publish block"
+        warn "Block was not accepted by beacon node", slot = currentSlot,
+          validator = validator.pubKey, validator_index = validator.index.get(),
+          deposits = len(signedBlock.message.body.deposits),
+          attestations = len(signedBlock.message.body.attestations),
+          graffiti = graffiti
     else:
       warn "Slashing protection activated for block proposal",
+           slot = currentSlot, validator = validator.pubKey,
+           validator_index = validator.index.get(),
            existingProposal = notSlashable.error
   except CatchableError as exc:
     error "Unexpected error happens while proposing block",
