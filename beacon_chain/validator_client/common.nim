@@ -203,6 +203,8 @@ proc getDurationToNextAttestation*(vc: ValidatorClientRef,
           let timeLeft = dutySlotTime - currentSlotTime
           if timeLeft < minimumDuration:
             minimumDuration = timeLeft
+    if minimumDuration != InfiniteDuration:
+      break
   if minimumDuration == InfiniteDuration:
     "<unknown>"
   else:
@@ -222,6 +224,8 @@ proc getDurationToNextBlock*(vc: ValidatorClientRef, slot: Slot): string =
             let timeLeft = proposalSlotTime - currentSlotTime
             if timeLeft < minimumDuration:
               minimumDuration = timeLeft
+    if minimumDuration != InfiniteDuration:
+      break
   if minimumDuration == InfiniteDuration:
     "<unknown>"
   else:
