@@ -686,7 +686,7 @@ proc handleSyncCommitteeContributions(node: BeaconNode,
 
     let contribution =
       node.syncCommitteeMsgPool[].produceContribution(
-        slot, head, candidateAggregators[i].committeeIdx)
+        slot, head, SubnetId candidateAggregators[i].committeeIdx)
 
     asyncSpawn signAndSendContribution(
       node,
