@@ -959,11 +959,11 @@ proc pruneBlocksDAG(dag: ChainDAGRef) =
     prunedHeads = hlen - dag.heads.len,
     dagPruneDur = Moment.now() - startTick
 
-func isSyncCommitteeMember*(blockRef: BlockRef,
-                            committeeIdx: SubnetId,
-                            validatorIdx: uint64): bool =
+func getSubcommitteePosition*(blockRef: BlockRef,
+                              committeeIdx: SubnetId,
+                              validatorIdx: uint64): Option[uint64] =
   # TODO
-  true
+  discard
 
 template syncCommitteeParticipants*(blockRef: BlockRef): openarray[ValidatorIndex] =
   newSeq[ValidatorIndex]()

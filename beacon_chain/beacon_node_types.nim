@@ -19,7 +19,8 @@ import
 export tables, hashes, block_pools_types
 
 from ./spec/datatypes/altair import
-  SyncCommitteeContribution
+  SyncCommitteeAggregationBits,
+  SYNC_COMMITTEE_SUBNET_COUNT
 
 const
   ATTESTATION_LOOKBACK* =
@@ -84,11 +85,24 @@ type
     slot*: Slot
     committeeIdx*: uint64
 
+  TrustedSyncCommitteeMsg* = object
+    subnetId*: SubnetId
+    positionInSubnet*: uint64
+    signature*: CookedSig
+
+  BestSyncSubcommitteeContribution* = object
+    totalParticipants*: int
+    participationBits*: SyncCommitteeAggregationBits
+    signature*: CookedSig
+
+  BestSyncSubcommitteeContributions* = array[SYNC_COMMITTEE_SUBNET_COUNT,
+                                             BestSyncSubcommitteeContribution]
+
   SyncCommitteeMsgPool* = object
     seenByAuthor*: HashSet[SyncCommitteeMsgKey]
     seenAggregateByAuthor*: HashSet[SyncCommitteeMsgKey]
-    blockVotes*: Table[Eth2Digest, seq[CookedSig]]
-    bestAggregates*: Table[Eth2Digest, seq[SyncCommitteeContribution]]
+    blockVotes*: Table[Eth2Digest, seq[TrustedSyncCommitteeMsg]]
+    bestAggregates*: Table[Eth2Digest, BestSyncSubcommitteeContributions]
 
   SyncCommitteeMsgPoolRef* = ref SyncCommitteeMsgPool
 

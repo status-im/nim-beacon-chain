@@ -20,7 +20,7 @@ import
     signatures],
   ../consensus_object_pools/[
     spec_cache, blockchain_dag, block_quarantine, spec_cache,
-    attestation_pool, exit_pool
+    attestation_pool, exit_pool, sync_committee_msg_pool
   ],
   ".."/[beacon_node_types, ssz, beacon_clock],
   ../validators/attestation_aggregation,
@@ -777,14 +777,16 @@ proc validateSyncCommitteeMessage*(
     # 2) We can postpone the rest of the processing until the missing block
     #    becomes available.
 
-  block:
-    # [REJECT] The subnet_id is valid for the given validator
-    # i.e. subnet_id in compute_subnets_for_sync_committee(state, sync_committee_message.validator_index).
-    # Note this validation implies the validator is part of the broader
-    # current sync committee along with the correct subcommittee.
-    if isSyncCommitteeMember(blockRef, subnet_id, msg.validator_index):
-      return err((ValidationResult.Reject, cstring(
-        "validateSyncCommitteeMessage: originator not part of sync committee")))
+  # [REJECT] The subnet_id is valid for the given validator
+  # i.e. subnet_id in compute_subnets_for_sync_committee(state, sync_committee_message.validator_index).
+  # Note this validation implies the validator is part of the broader
+  # current sync committee along with the correct subcommittee.
+  let positionInSubcommittee = getSubcommitteePosition(
+    blockRef, subnet_id, msg.validator_index)
+
+  if positionInSubcommittee.isNone:
+    return err((ValidationResult.Reject, cstring(
+      "validateSyncCommitteeMessage: originator not part of sync committee")))
 
   block:
     # [IGNORE] There has been no other valid sync committee signature for the
@@ -825,6 +827,8 @@ proc validateSyncCommitteeMessage*(
                                                    senderPubKey.get):
       return err((ValidationResult.Reject, cstring(
         "validateSyncCommitteeMessage: signature fails to verify")))
+
+  syncCommitteeMsgPool[].addMsg(msg, subnet_id, positionInSubcommittee.get)
 
   ok()
 
@@ -941,6 +945,8 @@ proc validateSignedContributionAndProof*(
                                                    committeeAggKey.finish):
       return err((ValidationResult.Reject, cstring(
         "validateSignedContributionAndProof: aggregate signature fails to verify")))
+
+  syncCommitteeMsgPool[].addAggregate msg
 
   ok()
 
