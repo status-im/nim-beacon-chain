@@ -9,7 +9,7 @@
 
 import options, sequtils, strutils
 import chronos, chronicles
-import ../spec/[datatypes, digest],
+import ../spec/[datatypes/phase0, datatypes/altair, digest, forkedbeaconstate_helpers],
        ../networking/eth2_network,
        ../beacon_node_types,
        ../ssz/merkleization,
@@ -49,7 +49,7 @@ proc init*(T: type RequestManager, network: Eth2Node,
   )
 
 proc checkResponse(roots: openArray[Eth2Digest],
-                   blocks: openArray[SignedBeaconBlock]): bool =
+                   blocks: openArray[ForkedSignedBeaconBlock]): bool =
   ## This procedure checks peer's response.
   var checks = @roots
   if len(blocks) > len(roots):
@@ -63,7 +63,7 @@ proc checkResponse(roots: openArray[Eth2Digest],
   return true
 
 proc validate(rman: RequestManager,
-              b: SignedBeaconBlock): Future[Result[void, BlockError]] =
+              b: ForkedSignedBeaconBlock): Future[Result[void, BlockError]] =
   let resfut = newFuture[Result[void, BlockError]]("request.manager.validate")
   rman.blockProcessor[].addBlock(b, resfut)
   resfut
@@ -76,7 +76,12 @@ proc fetchAncestorBlocksFromNetwork(rman: RequestManager,
     debug "Requesting blocks by root", peer = peer, blocks = shortLog(items),
                                        peer_score = peer.getScore()
 
-    let blocks = await peer.beaconBlocksByRoot(BlockRootsList items)
+    let blocks = if peer.useSyncV2():
+      await peer.beaconBlocksByRoot_v2(BlockRootsList items)
+    else:
+      (await peer.beaconBlocksByRoot(BlockRootsList items)).map() do (blcks: seq[phase0.SignedBeaconBlock]) -> auto:
+        blcks.mapIt(ForkedSignedBeaconBlock.init(it))
+
     if blocks.isOk:
       let ublocks = blocks.get()
       if checkResponse(items, ublocks):

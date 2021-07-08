@@ -18,7 +18,7 @@ import
 
   # Local modules
   ../spec/[crypto, digest, forkedbeaconstate_helpers, helpers, network, signatures],
-  ../spec/datatypes/base,
+  ../spec/datatypes/phase0,
   ../spec/eth2_apis/callsigs_types,
   ../consensus_object_pools/[blockchain_dag, spec_cache, attestation_pool], ../ssz/merkleization,
   ../beacon_node_common, ../beacon_node_types,
@@ -35,7 +35,7 @@ type
 proc installValidatorApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
     raises: [Exception].} = # TODO fix json-rpc
   rpcServer.rpc("get_v1_validator_block") do (
-      slot: Slot, graffiti: GraffitiBytes, randao_reveal: ValidatorSig) -> BeaconBlock:
+      slot: Slot, graffiti: GraffitiBytes, randao_reveal: ValidatorSig) -> phase0.BeaconBlock:
     debug "get_v1_validator_block", slot = slot
     let head = node.doChecksAndGetCurrentHead(slot)
     let proposer = node.dag.getProposer(head, slot)
@@ -47,7 +47,7 @@ proc installValidatorApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
       raise newException(CatchableError, "could not retrieve block for slot: " & $slot)
     return message.get().phase0Block.message
 
-  rpcServer.rpc("post_v1_validator_block") do (body: SignedBeaconBlock) -> bool:
+  rpcServer.rpc("post_v1_validator_block") do (body: phase0.SignedBeaconBlock) -> bool:
     debug "post_v1_validator_block",
       slot = body.message.slot,
       prop_idx = body.message.proposer_index
@@ -58,7 +58,7 @@ proc installValidatorApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
         "Proposal is for a past slot: " & $body.message.slot)
     if head == await proposeSignedBlock(
         node, head, AttachedValidator(),
-        ForkedSignedBeaconBlock(kind: BeaconBlockFork.Phase0, phase0Block: body)):
+        ForkedSignedBeaconBlock.init(body)):
       raise newException(CatchableError, "Could not propose block")
     return true
 

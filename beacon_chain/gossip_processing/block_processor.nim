@@ -104,7 +104,7 @@ proc hasBlocks*(self: BlockProcessor): bool =
 # ------------------------------------------------------------------------------
 
 proc addBlock*(
-    self: var BlockProcessor, blck: phase0.SignedBeaconBlock,
+    self: var BlockProcessor, blck: ForkedSignedBeaconBlock,
     resfut: Future[Result[void, BlockError]] = nil,
     validationDur = Duration()) =
   ## Enqueue a Gossip-validated block for consensus verification
@@ -120,32 +120,7 @@ proc addBlock*(
   # sanity check
   try:
     self.blocksQueue.addLastNoWait(BlockEntry(
-      blck: ForkedSignedBeaconBlock(
-        kind: BeaconBlockFork.Phase0, phase0Block: blck),
-      resfut: resfut, queueTick: Moment.now(),
-      validationDur: validationDur))
-  except AsyncQueueFullError:
-    raiseAssert "unbounded queue"
-
-proc addBlock*(
-    self: var BlockProcessor, blck: altair.SignedBeaconBlock,
-    resfut: Future[Result[void, BlockError]] = nil,
-    validationDur = Duration()) =
-  ## Enqueue a Gossip-validated block for consensus verification
-  # Backpressure:
-  #   There is no backpressure here - producers must wait for the future in the
-  #   BlockEntry to constrain their own processing
-  # Producers:
-  # - Gossip (when synced)
-  # - SyncManager (during sync)
-  # - RequestManager (missing ancestor blocks)
-
-  # addLast doesn't fail with unbounded queues, but we'll add asyncSpawn as a
-  # sanity check
-  try:
-    self.blocksQueue.addLastNoWait(BlockEntry(
-      blck: ForkedSignedBeaconBlock(
-        kind: BeaconBlockFork.Altair, altairBlock: blck),
+      blck: blck,
       resfut: resfut, queueTick: Moment.now(),
       validationDur: validationDur))
   except AsyncQueueFullError:
@@ -174,15 +149,15 @@ proc storeBlock(
   let
     attestationPool = self.consensusManager.attestationPool
 
+  type Trusted = typeof signedBlock.asTrusted()
   let blck = self.consensusManager.dag.addRawBlock(
     self.consensusManager.quarantine, signedBlock) do (
-      blckRef: BlockRef, trustedBlock: phase0.TrustedSignedBeaconBlock,
-      epochRef: EpochRef):
+      blckRef: BlockRef, trustedBlock: Trusted, epochRef: EpochRef):
     # Callback add to fork choice if valid
     attestationPool[].addForkChoice(
       epochRef, blckRef, trustedBlock.message, wallSlot)
 
-  self.dumpBlock(signedBlock, blck)
+  # TODO self.dumpBlock(signedBlock, blck)
 
   # There can be a scenario where we receive a block we already received.
   # However this block was before the last finalized epoch and so its parent
@@ -245,13 +220,7 @@ proc processBlock(self: var BlockProcessor, entry: BlockEntry) =
 
   let
     startTick = Moment.now()
-    # TODO ugly
-    res =
-      case entry.blck.kind:
-      of BeaconBlockFork.Phase0:
-        self.storeBlock(entry.blck.phase0Block, wallSlot)
-      of BeaconBlockFork.Altair:
-        self.storeBlock(entry.blck.altairBlock, wallSlot)
+    res = withBlck(entry.blck): self.storeBlock(blck, wallSlot)
     storeBlockTick = Moment.now()
 
   if res.isOk():

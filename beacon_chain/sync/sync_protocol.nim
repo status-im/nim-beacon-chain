@@ -343,6 +343,16 @@ p2pProtocol BeaconSync(version = 1,
     {.async, libp2pProtocol("goodbye", 1).} =
     debug "Received Goodbye message", reason = disconnectReasonName(reason), peer
 
+proc useSyncV2*(state: BeaconSyncNetworkState): bool =
+  let
+    wallTime = state.getTime()
+    wallTimeSlot = state.dag.beaconClock.toBeaconTime(wallTime).slotOrZero
+
+  wallTimeSlot.epoch >= state.dag.cfg.ALTAIR_FORK_EPOCH
+
+proc useSyncV2*(peer: Peer): bool =
+  peer.networkState(BeaconSync).useSyncV2()
+
 proc setStatusMsg(peer: Peer, statusMsg: StatusMsg) =
   debug "Peer status", peer, statusMsg
   peer.state(BeaconSync).statusMsg = statusMsg

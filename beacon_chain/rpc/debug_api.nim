@@ -13,7 +13,7 @@ import
   chronicles,
   ../version, ../beacon_node_common,
   ../networking/[eth2_network, peer_pool],
-  ../spec/datatypes/base,
+  ../spec/datatypes/phase0,
   ../spec/[digest, presets],
   ./rpc_utils, ./eth2_json_rpc_serialization
 
@@ -25,7 +25,7 @@ type
 proc installDebugApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
     raises: [Exception].} = # TODO fix json-rpc
   rpcServer.rpc("get_v1_debug_beacon_states_stateId") do (
-      stateId: string) -> BeaconState:
+      stateId: string) -> phase0.BeaconState:
     withStateForStateId(stateId):
       return stateData.data.hbsPhase0.data
 

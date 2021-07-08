@@ -11,7 +11,7 @@ import
   std/tables,
   stew/results,
   chronicles, chronos, metrics,
-  ../spec/[crypto, digest],
+  ../spec/[crypto, digest, forkedbeaconstate_helpers],
   ../spec/datatypes/[altair, phase0],
   ../consensus_object_pools/[block_clearance, blockchain_dag, exit_pool, attestation_pool],
   ./gossip_validation, ./block_processor,
@@ -19,10 +19,6 @@ import
   ../validators/validator_pool,
   ../beacon_node_types,
   ../beacon_clock, ../ssz/sszdump
-
-from ../spec/datatypes/altair import
-  SyncCommitteeMessage,
-  SignedContributionAndProof
 
 # Metrics for tracking attestation and beacon block loss
 declareCounter beacon_attestations_received,
@@ -181,7 +177,8 @@ proc blockValidator*(
   # propagation of seemingly good blocks
   trace "Block validated"
   self.blockProcessor[].addBlock(
-    signedBlock, validationDur = self.getCurrentBeaconTime() - wallTime)
+    ForkedSignedBeaconBlock.init(signedBlock),
+    validationDur = self.getCurrentBeaconTime() - wallTime)
 
   ValidationResult.Accept
 

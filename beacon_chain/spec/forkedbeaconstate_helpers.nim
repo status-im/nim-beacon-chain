@@ -51,6 +51,16 @@ type
 
   ForkDigestsRef* = ref ForkDigests
 
+template init*(T: type ForkedSignedBeaconBlock, blck: phase0.SignedBeaconBlock): T =
+  T(kind: BeaconBlockFork.Phase0, phase0Block: blck)
+template init*(T: type ForkedSignedBeaconBlock, blck: altair.SignedBeaconBlock): T =
+  T(kind: BeaconBlockFork.Altair, altairBlock: blck)
+
+template init*(T: type ForkedTrustedSignedBeaconBlock, blck: phase0.TrustedSignedBeaconBlock): T =
+  T(kind: BeaconBlockFork.Phase0, phase0Block: blck)
+template init*(T: type ForkedTrustedSignedBeaconBlock, blck: altair.TrustedSignedBeaconBlock): T =
+  T(kind: BeaconBlockFork.Altair, altairBlock: blck)
+
 # State-related functionality based on ForkedHashedBeaconState instead of BeaconState
 
 # Dispatch functions
@@ -219,21 +229,52 @@ func init*(T: type ForkDigests,
 
 template asSigned*(x: phase0.TrustedSignedBeaconBlock or phase0.SigVerifiedBeaconBlock):
     phase0.SignedBeaconBlock =
-  static: # TODO See isomorphicCast
-    doAssert sizeof(x) == sizeof(phase0.SignedBeaconBlock)
-
-  cast[ptr phase0.SignedBeaconBlock](x.unsafeAddr)[]
+  isomorphicCast[phase0.SignedBeaconBlock](x)
 
 template asSigned*(x: altair.TrustedSignedBeaconBlock or altair.SigVerifiedBeaconBlock):
     altair.SignedBeaconBlock =
-  static: # TODO See isomorphicCast
-    doAssert sizeof(x) == sizeof(altair.SignedBeaconBlock)
-
-  cast[ptr altair.SignedBeaconBlock](x.unsafeAddr)[]
+  isomorphicCast[altair.SignedBeaconBlock](x)
 
 template asSigned*(x: ForkedTrustedSignedBeaconBlock): ForkedSignedBeaconBlock =
-  static: # TODO See isomorphicCast
-    doAssert sizeof(x) == sizeof(ForkedSignedBeaconBlock)
+  isomorphicCast[ForkedSignedBeaconBlock](x)
 
-  cast[ptr ForkedSignedBeaconBlock](x.unsafeAddr)[]
+template asTrusted*(x: phase0.SignedBeaconBlock or phase0.SigVerifiedBeaconBlock):
+    phase0.TrustedSignedBeaconBlock =
+  isomorphicCast[phase0.TrustedSignedBeaconBlock](x)
 
+template asTrusted*(x: altair.SignedBeaconBlock or altair.SigVerifiedBeaconBlock):
+    altair.TrustedSignedBeaconBlock =
+  isomorphicCast[altair.TrustedSignedBeaconBlock](x)
+
+template asTrusted*(x: ForkedSignedBeaconBlock): ForkedSignedBeaconBlock =
+  isomorphicCast[ForkedTrustedSignedBeaconBlock](x)
+
+template withBlck*(x: ForkedSignedBeaconBlock | ForkedTrustedSignedBeaconBlock, body: untyped): untyped =
+  case x.kind
+  of BeaconBlockFork.Phase0:
+    template blck: untyped = x.phase0Block
+    body
+  of BeaconBlockFork.Altair:
+    template blck: untyped = x.altairBlock
+    body
+
+template getForkedBlockField*(x: ForkedSignedBeaconBlock | ForkedTrustedSignedBeaconBlock, y: untyped): untyped =
+  withBlck(x): blck.message.y
+
+template signature*(x: ForkedSignedBeaconBlock): ValidatorSig =
+  withBlck(x): blck.signature
+
+template signature*(x: ForkedTrustedSignedBeaconBlock): TrustedSig =
+  withBlck(x): blck.signature
+
+template root*(x: ForkedSignedBeaconBlock | ForkedTrustedSignedBeaconBlock): Eth2Digest =
+  withBlck(x): blck.root
+
+template slot*(x: ForkedSignedBeaconBlock | ForkedTrustedSignedBeaconBlock): Slot =
+  getForkedBlockField(x, slot)
+
+func shortLog*(x: ForkedSignedBeaconBlock | ForkedTrustedSignedBeaconBlock): auto =
+  withBlck(x): shortLog(blck.message)
+
+chronicles.formatIt ForkedSignedBeaconBlock: it.shortLog
+chronicles.formatIt ForkedTrustedSignedBeaconBlock: it.shortLog

@@ -10,12 +10,12 @@
 import chronicles
 import options, deques, heapqueue, tables, strutils, sequtils, math, algorithm
 import stew/results, chronos, chronicles
-import ../spec/[datatypes, digest, helpers, eth2_apis/callsigs_types],
+import ../spec/[datatypes/phase0, datatypes/altair, digest, helpers, eth2_apis/callsigs_types, forkedbeaconstate_helpers],
        ../networking/[peer_pool, eth2_network]
 
 import ../gossip_processing/block_processor
 import ../consensus_object_pools/block_pools_types
-export datatypes, digest, chronos, chronicles, results, block_pools_types,
+export phase0, altair, digest, chronos, chronicles, results, block_pools_types,
        helpers
 
 logScope:
@@ -70,7 +70,7 @@ type
 
   SyncResult*[T] = object
     request*: SyncRequest[T]
-    data*: seq[SignedBeaconBlock]
+    data*: seq[ForkedSignedBeaconBlock]
 
   SyncWaiter*[T] = object
     future: Future[bool]
@@ -141,16 +141,16 @@ type
     stamp*: chronos.Moment
 
   SyncManagerError* = object of CatchableError
-  BeaconBlocksRes* = NetRes[seq[SignedBeaconBlock]]
+  BeaconBlocksRes* = NetRes[seq[ForkedSignedBeaconBlock]]
 
 proc validate*[T](sq: SyncQueue[T],
-                  blk: SignedBeaconBlock): Future[Result[void, BlockError]] =
+                  blk: ForkedSignedBeaconBlock): Future[Result[void, BlockError]] =
   let resfut = newFuture[Result[void, BlockError]]("sync.manager.validate")
   sq.blockProcessor[].addBlock(blk, resfut)
   resfut
 
 proc getShortMap*[T](req: SyncRequest[T],
-                     data: openArray[SignedBeaconBlock]): string =
+                     data: openArray[ForkedSignedBeaconBlock]): string =
   ## Returns all slot numbers in ``data`` as placement map.
   var res = newStringOfCap(req.count)
   var slider = req.slot
@@ -158,11 +158,11 @@ proc getShortMap*[T](req: SyncRequest[T],
   for i in 0 ..< req.count:
     if last < len(data):
       for k in last ..< len(data):
-        if slider == data[k].message.slot:
+        if slider == data[k].slot:
           res.add('x')
           last = k + 1
           break
-        elif slider < data[k].message.slot:
+        elif slider < data[k].slot:
           res.add('.')
           break
     else:
@@ -178,7 +178,7 @@ proc cmp*[T](a, b: SyncRequest[T]): int =
   result = cmp(uint64(a.slot), uint64(b.slot))
 
 proc checkResponse*[T](req: SyncRequest[T],
-                       data: openArray[SignedBeaconBlock]): bool =
+                       data: openArray[ForkedSignedBeaconBlock]): bool =
   if len(data) == 0:
     # Impossible to verify empty response.
     return true
@@ -193,9 +193,9 @@ proc checkResponse*[T](req: SyncRequest[T],
   var dindex = 0
 
   while (rindex < req.count) and (dindex < len(data)):
-    if slot < data[dindex].message.slot:
+    if slot < data[dindex].slot:
       discard
-    elif slot == data[dindex].message.slot:
+    elif slot == data[dindex].slot:
       inc(dindex)
     else:
       return false
@@ -208,7 +208,7 @@ proc checkResponse*[T](req: SyncRequest[T],
     return false
 
 proc getFullMap*[T](req: SyncRequest[T],
-                    data: openArray[SignedBeaconBlock]): string =
+                    data: openArray[ForkedSignedBeaconBlock]): string =
   # Returns all slot numbers in ``data`` as comma-delimeted string.
   result = mapIt(data, $it.message.slot).join(", ")
 
@@ -411,7 +411,7 @@ proc hasEndGap*[T](sr: SyncResult[T]): bool {.inline.} =
   let lastslot = sr.request.slot + sr.request.count - 1'u64
   if len(sr.data) == 0:
     return true
-  if sr.data[^1].message.slot != lastslot:
+  if sr.data[^1].slot != lastslot:
     return true
   return false
 
@@ -422,7 +422,7 @@ proc getLastNonEmptySlot*[T](sr: SyncResult[T]): Slot {.inline.} =
     # If response has only empty slots we going to use original request slot
     sr.request.slot
   else:
-    sr.data[^1].message.slot
+    sr.data[^1].slot
 
 proc toDebtsQueue[T](sq: SyncQueue[T], sr: SyncRequest[T]) =
   sq.debtsQueue.push(sr)
@@ -512,7 +512,7 @@ proc getRewindPoint*[T](sq: SyncQueue[T], failSlot: Slot,
     compute_start_slot_at_epoch(rewindEpoch)
 
 proc push*[T](sq: SyncQueue[T], sr: SyncRequest[T],
-              data: seq[SignedBeaconBlock]) {.async, gcsafe.} =
+              data: seq[ForkedSignedBeaconBlock]) {.async, gcsafe.} =
   ## Push successfull result to queue ``sq``.
   mixin updateScore
 
@@ -559,10 +559,10 @@ proc push*[T](sq: SyncQueue[T], sr: SyncRequest[T],
     if len(item.data) > 0:
       for blk in item.data:
         trace "Pushing block", block_root = blk.root,
-                               block_slot = blk.message.slot
+                               block_slot = blk.slot
         res = await sq.validate(blk)
         if not(res.isOk):
-          failSlot = some(blk.message.slot)
+          failSlot = some(blk.slot)
           break
     else:
       res = Result[void, BlockError].ok()
@@ -757,20 +757,36 @@ proc getBlocks*[A, B](man: SyncManager[A, B], peer: A,
         slot = req.slot, slot_count = req.count, step = req.step,
         peer_score = peer.getScore(), peer_speed = peer.netKbps(),
         topics = "syncman"
-  var workFut = awaitne beaconBlocksByRange(peer, req.slot, req.count, req.step)
-  if workFut.failed():
-    debug "Error, while waiting getBlocks response", peer = peer,
-          slot = req.slot, slot_count = req.count, step = req.step,
-          errMsg = workFut.readError().msg, peer_speed = peer.netKbps(),
-          topics = "syncman"
+  if peer.useSyncV2():
+    var workFut = awaitne beaconBlocksByRange_v2(peer, req.slot, req.count, req.step)
+    if workFut.failed():
+      debug "Error, while waiting getBlocks response", peer = peer,
+            slot = req.slot, slot_count = req.count, step = req.step,
+            errMsg = workFut.readError().msg, peer_speed = peer.netKbps(),
+            topics = "syncman"
+    else:
+      let res = workFut.read()
+      if res.isErr:
+        debug "Error, while reading getBlocks response",
+              peer = peer, slot = req.slot, count = req.count,
+              step = req.step, peer_speed = peer.netKbps(),
+              topics = "syncman", error = $res.error()
+      result = res
   else:
-    let res = workFut.read()
-    if res.isErr:
-      debug "Error, while reading getBlocks response",
-            peer = peer, slot = req.slot, count = req.count,
-            step = req.step, peer_speed = peer.netKbps(),
-            topics = "syncman", error = $res.error()
-    result = res
+    var workFut = awaitne beaconBlocksByRange(peer, req.slot, req.count, req.step)
+    if workFut.failed():
+      debug "Error, while waiting getBlocks response", peer = peer,
+            slot = req.slot, slot_count = req.count, step = req.step,
+            errMsg = workFut.readError().msg, peer_speed = peer.netKbps(),
+            topics = "syncman"
+    else:
+      let res = workFut.read()
+      if res.isErr:
+        debug "Error, while reading getBlocks response",
+              peer = peer, slot = req.slot, count = req.count,
+              step = req.step, peer_speed = peer.netKbps(),
+              topics = "syncman", error = $res.error()
+      result = res.map() do (blcks: seq[phase0.SignedBeaconBlock]) -> auto: blcks.mapIt(ForkedSignedBeaconBlock.init(it))
 
 template headAge(): uint64 =
   wallSlot - headSlot

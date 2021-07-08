@@ -18,7 +18,7 @@ import
   ../validators/validator_duties,
   ../gossip_processing/gossip_validation,
   ../consensus_object_pools/blockchain_dag,
-  ../spec/[crypto, datatypes, digest, forkedbeaconstate_helpers, network],
+  ../spec/[crypto, datatypes/phase0, digest, forkedbeaconstate_helpers, network],
   ../spec/eth2_apis/callsigs_types,
   ../ssz/merkleization,
   ./rpc_utils, ./eth2_json_rpc_serialization
@@ -399,7 +399,7 @@ proc installBeaconApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
 
     result.canonical = bd.refs.isAncestorOf(node.dag.head)
 
-  rpcServer.rpc("post_v1_beacon_blocks") do (blck: SignedBeaconBlock) -> int:
+  rpcServer.rpc("post_v1_beacon_blocks") do (blck: phase0.SignedBeaconBlock) -> int:
     if not(node.syncManager.inProgress):
       raise newException(CatchableError,
                          "Beacon node is currently syncing, try again later.")
@@ -415,7 +415,7 @@ proc installBeaconApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
     else:
       let res = await proposeSignedBlock(
         node, head, AttachedValidator(),
-        ForkedSignedBeaconBlock(kind: BeaconBlockFork.Phase0, phase0Block: blck))
+        ForkedSignedBeaconBlock.init(blck))
       if res == head:
         # TODO altair-transition, but not immediate testnet-priority
         let blocksTopic = getBeaconBlocksTopic(node.dag.forkDigests.phase0)
@@ -429,7 +429,7 @@ proc installBeaconApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
         return 200
 
   rpcServer.rpc("get_v1_beacon_blocks_blockId") do (
-      blockId: string) -> TrustedSignedBeaconBlock:
+      blockId: string) -> phase0.TrustedSignedBeaconBlock:
     # TODO detect Altair and fail: /v1/ APIs don't support Altair
     return node.getBlockDataFromBlockId(blockId).data.phase0Block
 

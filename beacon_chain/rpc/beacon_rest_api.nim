@@ -13,7 +13,7 @@ import
   ../gossip_processing/gossip_validation,
   ../validators/validator_duties,
   ../spec/[crypto, digest, forkedbeaconstate_helpers, network],
-  ../spec/datatypes/base,
+  ../spec/datatypes/phase0,
   ../ssz/merkleization,
   ./eth2_json_rest_serialization, ./rest_utils
 
@@ -615,7 +615,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
       block:
         if contentBody.isNone():
           return RestApiResponse.jsonError(Http400, EmptyRequestBodyError)
-        let dres = decodeBody(SignedBeaconBlock, contentBody.get())
+        let dres = decodeBody(phase0.SignedBeaconBlock, contentBody.get())
         if dres.isErr():
           return RestApiResponse.jsonError(Http400, InvalidBlockObjectError,
                                            $dres.error())
@@ -635,7 +635,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
       node.network.broadcast(blocksTopic, blck)
       return RestApiResponse.jsonError(Http202, BlockValidationError)
     else:
-      let res = await proposeSignedBlock(node, head, AttachedValidator(), ForkedSignedBeaconBlock(kind: BeaconBlockFork.Phase0, phase0Block: blck))
+      let res = await proposeSignedBlock(node, head, AttachedValidator(), ForkedSignedBeaconBlock.init(blck))
       if res == head:
         # TODO altair-transition, but not for immediate testnet-priority
         let blocksTopic = getBeaconBlocksTopic(node.dag.forkDigests.phase0)
