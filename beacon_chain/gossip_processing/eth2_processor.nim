@@ -361,6 +361,10 @@ proc syncCommitteeMsgValidator*(
     checkSignature: bool = true): ValidationResult =
   let wallTime = self.getCurrentBeaconTime()
 
+  # Potential under/overflows are fine; would just create odd metrics and logs
+  let delay = wallTime - syncCommitteeMsg.slot.toBeaconTime
+  debug "Sync committee message received", delay
+
   # Now proceed to validation
   let v = validateSyncCommitteeMessage(self.dag, self.syncCommitteeMsgPool,
                                        syncCommitteeMsg, subnet_id, wallTime,
@@ -376,6 +380,10 @@ proc syncCommitteeContributionValidator*(
     contributionAndProof: SignedContributionAndProof,
     checkSignature: bool = true): ValidationResult =
   let wallTime = self.getCurrentBeaconTime()
+
+  # Potential under/overflows are fine; would just create odd metrics and logs
+  let delay = wallTime - contributionAndProof.message.contribution.slot.toBeaconTime
+  debug "Sync committee contribution received", delay
 
   # Now proceed to validation
   let v = validateSignedContributionAndProof(self.dag, self.syncCommitteeMsgPool,

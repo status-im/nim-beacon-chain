@@ -709,7 +709,27 @@ proc subscribeAttestationSubnetHandlers(node: BeaconNode) {.
   node.network.subscribeAttestationSubnets(
     node.attestationSubnets.aggregateSubnets + stabilitySubnets)
 
-proc addMessageHandlers(node: BeaconNode) {.raises: [Defect, CatchableError].} =
+proc subscribeToPersistentAltairTopics*(node: BeaconNode, params: TopicParams, epoch: Epoch)
+                                       {.raises: [Defect, CatchableError].} =
+  for it in 0'u64 ..< SYNC_COMMITTEE_SUBNET_COUNT.uint64:
+    closureScope:
+      let subnet_id = SubnetId(it)
+      # TODO This should be done in dynamic way in trackSyncCommitteeTopics
+      node.network.subscribe(getSyncCommitteeTopic(node.dag.forkDigests.altair, subnet_id), params)
+
+  node.network.subscribe(getSyncCommitteeContributionAndProofTopic(node.dag.forkDigests.altair), params)
+
+proc unsubscribeToPersistentAltairTopics*(node: BeaconNode)
+                                         {.raises: [Defect, CatchableError].} =
+  for it in 0'u64 ..< SYNC_COMMITTEE_SUBNET_COUNT.uint64:
+    closureScope:
+      let subnet_id = SubnetId(it)
+      # TODO This should be done in dynamic way in trackSyncCommitteeTopics
+      node.network.unsubscribe(getSyncCommitteeTopic(node.dag.forkDigests.altair, subnet_id))
+
+  node.network.unsubscribe(getSyncCommitteeContributionAndProofTopic(node.dag.forkDigests.altair))
+
+proc addMessageHandlers(node: BeaconNode, slot: Slot) {.raises: [Defect, CatchableError].} =
   # inspired by lighthouse research here
   # https://gist.github.com/blacktemplar/5c1862cb3f0e32a1a7fb0b25e79e6e2c#file-generate-scoring-params-py
   const
@@ -778,6 +798,10 @@ proc addMessageHandlers(node: BeaconNode) {.raises: [Defect, CatchableError].} =
   node.network.subscribe(getAggregateAndProofsTopic(node.dag.forkDigests.altair), aggregateTopicParams, enableTopicMetrics = true)
 
   node.subscribeAttestationSubnetHandlers()
+  # TODO: This should be done when we detect that Altair is close enough
+  #       Similar code should be present for all Altair topics
+  # TODO: What are the best topic params for this?
+  node.subscribeToPersistentAltairTopics(basicParams, slot.epoch)
 
 func getTopicSubscriptionEnabled(node: BeaconNode): bool =
   node.attestationSubnets.enabled
@@ -804,6 +828,8 @@ proc removeMessageHandlers(node: BeaconNode) {.raises: [Defect, CatchableError].
     node.network.unsubscribe(
       getAttestationTopic(node.dag.forkDigests.altair, SubnetId(subnet_id)))
 
+  node.unsubscribeToPersistentAltairTopics()
+
 proc setupDoppelgangerDetection(node: BeaconNode, slot: Slot) =
   # When another client's already running, this is very likely to detect
   # potential duplicate validators, which can trigger slashing.
@@ -820,29 +846,6 @@ proc setupDoppelgangerDetection(node: BeaconNode, slot: Slot) =
     epoch = slot.epoch,
     broadcastStartEpoch =
       node.processor.doppelgangerDetection.broadcastStartEpoch
-
-proc subscribeToPersistentAltairTopics*(
-    node: BeaconNode, epoch: Epoch) {.
-    raises: [Defect, CatchableError].} =
-  if node.syncCommitteesUpdatedAt.isSome:
-    return
-
-  node.syncCommitteesUpdatedAt = some epoch
-
-  # TODO: SYNC_COMMITTEE_SUBNET_COUNT is not appropraite here
-  for it in 0'u64 ..< SYNC_COMMITTEE_SUBNET_COUNT.uint64:
-    closureScope:
-      let subnet_id = SubnetId(it)
-      node.network.addValidator(
-        getSyncCommitteeTopic(node.dag.forkDigests.altair, subnet_id),
-        # This proc needs to be within closureScope; don't lift out of loop.
-        proc(msg: SyncCommitteeMessage): ValidationResult =
-          node.processor.syncCommitteeMsgValidator(msg, subnet_id))
-
-  node.network.addValidator(
-    getSyncCommitteeContributionAndProofTopic(node.dag.forkDigests.altair),
-    proc(msg: SignedContributionAndProof): ValidationResult =
-      node.processor.syncCommitteeContributionValidator(msg))
 
 proc trackSyncCommitteeTopics*(
     node: BeaconNode) {.
@@ -884,7 +887,7 @@ proc updateGossipStatus(node: BeaconNode, slot: Slot) {.raises: [Defect, Catchab
       syncQueueLen
 
     node.setupDoppelgangerDetection(slot)
-    node.addMessageHandlers()
+    node.addMessageHandlers(slot)
     doAssert node.getTopicSubscriptionEnabled()
   elif
       topicSubscriptionEnabled and
@@ -1304,6 +1307,20 @@ proc installMessageValidators(node: BeaconNode) =
     proc (signedVoluntaryExit: SignedVoluntaryExit): ValidationResult =
       node.processor[].voluntaryExitValidator(signedVoluntaryExit))
 
+  for it in 0'u64 ..< SYNC_COMMITTEE_SUBNET_COUNT.uint64:
+    closureScope:
+      let subnet_id = SubnetId(it)
+      node.network.addValidator(
+        getSyncCommitteeTopic(node.dag.forkDigests.altair, subnet_id),
+        # This proc needs to be within closureScope; don't lift out of loop.
+        proc(msg: SyncCommitteeMessage): ValidationResult =
+          node.processor.syncCommitteeMsgValidator(msg, subnet_id))
+
+  node.network.addValidator(
+    getSyncCommitteeContributionAndProofTopic(node.dag.forkDigests.altair),
+    proc(msg: SignedContributionAndProof): ValidationResult =
+      node.processor.syncCommitteeContributionValidator(msg))
+
 proc stop*(node: BeaconNode) =
   bnStatus = BeaconNodeStatus.Stopping
   notice "Graceful shutdown"
@@ -1345,8 +1362,9 @@ proc run*(node: BeaconNode) {.raises: [Defect, CatchableError].} =
     node.startSyncManager()
 
     if not startTime.toSlot().afterGenesis:
-      node.setupDoppelgangerDetection(startTime.slotOrZero())
-      node.addMessageHandlers()
+      let slot = startTime.slotOrZero()
+      node.setupDoppelgangerDetection(slot)
+      node.addMessageHandlers(slot)
       doAssert node.getTopicSubscriptionEnabled()
 
   ## Ctrl+C handling

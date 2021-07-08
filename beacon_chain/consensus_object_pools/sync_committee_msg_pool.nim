@@ -122,7 +122,7 @@ proc prodeuceSyncAggregateAux(votes: BestSyncSubcommitteeContributions): SyncAgg
 
     for pos, value in votes[subnetId].participationBits:
       if value:
-        let globalPos = subnetId * SYNC_SUBCOMMITTE_SIZE + pos
+        let globalPos = subnetId * SYNC_SUBCOMMITTEE_SIZE + pos
         result.sync_committee_bits.setBit globalPos
 
     if not initialized:

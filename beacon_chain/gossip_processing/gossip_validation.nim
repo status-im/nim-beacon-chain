@@ -794,8 +794,8 @@ proc validateSyncCommitteeMessage*(
   # i.e. subnet_id in compute_subnets_for_sync_committee(state, sync_committee_message.validator_index).
   # Note this validation implies the validator is part of the broader
   # current sync committee along with the correct subcommittee.
-  let positionInSubcommittee = getSubcommitteePosition(
-    blockRef, subnet_id, msg.validator_index)
+  let positionInSubcommittee = dag.getSubcommitteePosition(
+    blockRef, subnet_id, ValidatorIndex msg.validator_index)
 
   if positionInSubcommittee.isNone:
     return err((ValidationResult.Reject, cstring(
@@ -941,7 +941,7 @@ proc validateSignedContributionAndProof*(
       committeeAggKey {.noInit.}: AggregatePublicKey
       initialized = false
 
-    for valIndex in syncCommitteeParticipants(
+    for valIndex in dag.syncCommitteeParticipants(
                       blockRef,
                       SubnetId msg.message.contribution.subcommittee_index,
                       msg.message.contribution.aggregation_bits):

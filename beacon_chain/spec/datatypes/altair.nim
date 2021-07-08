@@ -66,7 +66,7 @@ const
   INACTIVITY_SCORE_BIAS* = 4
   INACTIVITY_SCORE_RECOVERY_RATE* = 16
 
-  SYNC_SUBCOMMITTE_SIZE* = SYNC_COMMITTEE_SIZE div SYNC_COMMITTEE_SUBNET_COUNT
+  SYNC_SUBCOMMITTEE_SIZE* = SYNC_COMMITTEE_SIZE div SYNC_COMMITTEE_SUBNET_COUNT
 
 # "Note: The sum of the weights equal WEIGHT_DENOMINATOR."
 static: doAssert TIMELY_SOURCE_WEIGHT + TIMELY_TARGET_WEIGHT +
@@ -106,7 +106,7 @@ type
 
   # https://github.com/ethereum/eth2.0-specs/blob/v1.1.0-alpha.8/specs/altair/validator.md#synccommitteecontribution
   SyncCommitteeAggregationBits* =
-    BitArray[SYNC_SUBCOMMITTE_SIZE]
+    BitArray[SYNC_SUBCOMMITTEE_SIZE]
 
   SyncCommitteeContribution* = object
     slot*: Slot ##\

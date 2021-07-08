@@ -282,7 +282,7 @@ proc addRawBlockKnownParent(
     # TODO: remove skipBLSValidation
     var sigs: seq[SignatureSet]
     if sigs.collectSignatureSets(
-        signedBlock, dag.db.immutableValidators, dag.clearanceState.data, cache).isErr():
+        signedBlock, dag.db.immutableValidators.byIndex, dag.clearanceState.data, cache).isErr():
       # A PublicKey or Signature isn't on the BLS12-381 curve
       return err((ValidationResult.Reject, Invalid))
     # TODO this seems to trip on the generated Altair blocks so far, when Altair blocks

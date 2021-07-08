@@ -633,22 +633,6 @@ proc handleAttestations(node: BeaconNode, head: BlockRef, slot: Slot) =
           validator = validator.pubkey,
           badVoteDetails = $registered.error()
 
-func syncCommitteeSubnetsCount(syncCommittee: openarray[ValidatorIndex]): int =
-  if syncCommittee.len == 0:
-    0
-  else:
-    1 + ((syncCommittee.len - 1) div SYNC_COMMITTEE_SIZE)
-
-proc syncCommitteeSubnet(syncCommittee: openarray[ValidatorIndex],
-                             subnetId: SubnetId): seq[ValidatorIndex] =
-  ## TODO Return a view type
-  ## Unfortunately, this doesn't work as a template right now.
-  let
-    startIdx = subnetId.int * SYNC_COMMITTEE_SIZE
-    onePastEndIdx = min(startIdx + SYNC_COMMITTEE_SIZE, syncCommittee.len)
-  doAssert startIdx < syncCommittee.len
-  @(toOpenArray(syncCommittee, startIdx, onePastEndIdx - 1))
-
 proc createAndSendSyncCommitteeMessage(node: BeaconNode,
                                        slot: Slot,
                                        validator: AttachedValidator,
@@ -693,12 +677,10 @@ proc createAndSendSyncCommitteeMessage(node: BeaconNode,
 
 proc handleSyncCommitteeMessages(node: BeaconNode, head: BlockRef, slot: Slot) =
   # TODO Use a view type to avoid the copy
-  var syncCommittee = @(syncCommitteeParticipants(head))
+  var syncCommittee = @(node.dag.syncCommitteeParticipants(head))
 
-  for subnetIdx in 0 ..< syncCommitteeSubnetsCount(syncCommittee):
-    # TODO Hoist outside of the loop with a view type
-    #      to avoid the repeated offset calculations
-    for valIdx in items(syncCommitteeSubnet(syncCommittee, SubnetId subnetIdx)):
+  for subnetIdx in 0 ..< SYNC_COMMITTEE_SUBNET_COUNT:
+    for valIdx in syncSubcommittee(syncCommittee, SubnetId subnetIdx):
       let validator = node.getAttachedValidator(valIdx)
       if validator == nil:
         continue
@@ -734,7 +716,7 @@ proc handleSyncCommitteeContributions(node: BeaconNode,
   let
     fork = node.dag.forkAtSlot(slot)
     genesisValidatorsRoot = node.dag.genesisValidatorsRoot
-    syncCommittee = @(syncCommitteeParticipants(head))
+    syncCommittee = @(node.dag.syncCommitteeParticipants(head))
 
   type
     AggregatorCandidate = object
@@ -744,10 +726,10 @@ proc handleSyncCommitteeContributions(node: BeaconNode,
   var candidateAggregators: seq[AggregatorCandidate]
   var selectionProofs: seq[Future[ValidatorSig]]
 
-  for committeeIdx in 0 ..< syncCommitteeSubnetsCount(syncCommittee):
+  for committeeIdx in 0 ..< SYNC_COMMITTEE_SUBNET_COUNT:
     # TODO Hoist outside of the loop with a view type
     #      to avoid the repeated offset calculations
-    for valIdx in items(syncCommitteeSubnet(syncCommittee, SubnetId committeeIdx)):
+    for valIdx in syncSubcommittee(syncCommittee, SubnetId committeeIdx):
       let validator = node.getAttachedValidator(valIdx)
       if validator == nil:
         continue
