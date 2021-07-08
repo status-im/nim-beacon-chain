@@ -38,8 +38,9 @@ import
          beacon_rest_api, event_rest_api, validator_rest_api, nimbus_rest_api],
   ./rpc/[beacon_api, config_api, debug_api, event_api, nimbus_api, node_api,
     validator_api],
+  ./spec/datatypes/[altair, phase0],
   ./spec/[
-    datatypes, digest, crypto, forkedbeaconstate_helpers, beaconstate,
+    digest, crypto, forkedbeaconstate_helpers, beaconstate,
     eth2_apis/beacon_rpc_client, helpers, network, presets, weak_subjectivity,
     signatures],
   ./consensus_object_pools/[
@@ -1250,7 +1251,7 @@ proc installMessageValidators(node: BeaconNode) =
 
   node.network.addValidator(
     getBeaconBlocksTopic(node.dag.forkDigests.phase0),
-    proc (signedBlock: SignedBeaconBlock): ValidationResult =
+    proc (signedBlock: phase0.SignedBeaconBlock): ValidationResult =
       node.processor[].blockValidator(signedBlock))
 
   node.network.addValidator(
@@ -1285,7 +1286,7 @@ proc installMessageValidators(node: BeaconNode) =
 
   node.network.addValidator(
     getBeaconBlocksTopic(node.dag.forkDigests.altair),
-    proc (signedBlock: SignedBeaconBlock): ValidationResult =
+    proc (signedBlock: altair.SignedBeaconBlock): ValidationResult =
       node.processor[].blockValidator(signedBlock))
 
   node.network.addValidator(

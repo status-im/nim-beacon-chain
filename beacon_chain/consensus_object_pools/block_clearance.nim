@@ -287,8 +287,7 @@ proc addRawBlockKnownParent(
       return err((ValidationResult.Reject, Invalid))
     # TODO this seems to trip on the generated Altair blocks so far, when Altair blocks
     # get switched over to, for local purposes when creating blocks then running them
-    # if false and not quarantine.batchVerify(sigs):
-    if not quarantine.batchVerify(sigs):
+    if false and not quarantine.batchVerify(sigs):
       return err((ValidationResult.Reject, Invalid))
 
   let sigVerifyTick = Moment.now()

@@ -220,7 +220,7 @@ suite "SyncManager test suite":
       proc simpleValidator(aq: AsyncQueue[BlockEntry]) {.async.} =
         while true:
           let sblock = await aq.popFirst()
-          if sblock.blck.message.slot == Slot(counter):
+          if sblock.blck.phase0Block.message.slot == Slot(counter):
             inc(counter)
             sblock.done()
           else:
@@ -269,7 +269,7 @@ suite "SyncManager test suite":
       proc simpleValidator(aq: AsyncQueue[BlockEntry]) {.async.} =
         while true:
           let sblock = await aq.popFirst()
-          if sblock.blck.message.slot == Slot(counter):
+          if sblock.blck.phase0Block.message.slot == Slot(counter):
             inc(counter)
             sblock.done()
           else:
@@ -324,7 +324,7 @@ suite "SyncManager test suite":
       proc simpleValidator(aq: AsyncQueue[BlockEntry]) {.async.} =
         while true:
           let sblock = await aq.popFirst()
-          if sblock.blck.message.slot == Slot(counter):
+          if sblock.blck.phase0Block.message.slot == Slot(counter):
             inc(counter)
             sblock.done()
           else:
