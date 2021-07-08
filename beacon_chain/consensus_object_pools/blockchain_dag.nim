@@ -424,7 +424,7 @@ proc init*(T: type ChainDAGRef,
     updateFlags: {verifyFinalization} * updateFlags,
     cfg: cfg,
   )
-
+  doAssert cfg.GENESIS_FORK_VERSION != cfg.ALTAIR_FORK_VERSION
   doAssert dag.updateFlags in [{}, {verifyFinalization}]
 
   var cache: StateCache
@@ -666,15 +666,6 @@ func getBlockBySlot*(dag: ChainDAGRef, slot: Slot): BlockRef =
   ## with slot number less or equal to `slot`.
   dag.head.atSlot(slot).blck
 
-proc get*(dag: ChainDAGRef, blck: BlockRef): BlockData =
-  ## Retrieve the associated block body of a block reference
-  doAssert (not blck.isNil), "Trying to get nil BlockRef"
-
-  let data = dag.db.getBlock(blck.root)
-  doAssert data.isSome, "BlockRef without backing data, database corrupt?"
-
-  BlockData(data: data.get(), refs: blck)
-
 proc getForkedBlock*(dag: ChainDAGRef, blck: BlockRef): ForkedTrustedSignedBeaconBlock =
   # TODO implement this properly
   let phase0Block = dag.db.getBlock(blck.root)
@@ -688,6 +679,12 @@ proc getForkedBlock*(dag: ChainDAGRef, blck: BlockRef): ForkedTrustedSignedBeaco
                                           altairBlock: altairBlock.get)
 
   raiseAssert "BlockRef without backing data, database corrupt?"
+
+proc get*(dag: ChainDAGRef, blck: BlockRef): BlockData =
+  ## Retrieve the associated block body of a block reference
+  doAssert (not blck.isNil), "Trying to get nil BlockRef"
+
+  BlockData(data: dag.getForkedBlock(blck), refs: blck)
 
 proc get*(dag: ChainDAGRef, root: Eth2Digest): Option[BlockData] =
   ## Retrieve a resolved block reference and its associated body, if available
@@ -732,9 +729,17 @@ proc applyBlock(
 
   loadStateCache(dag, cache, state.blck, getStateField(state.data, slot).epoch)
 
-  let ok = state_transition(
-    dag.cfg, state.data, blck.data,
-    cache, rewards, flags + dag.updateFlags + {slotProcessed}, restore)
+  # TODO some abstractions
+  let ok =
+    case blck.data.kind:
+    of BeaconBlockFork.Phase0:
+      state_transition(
+        dag.cfg, state.data, blck.data.phase0Block,
+        cache, rewards, flags + dag.updateFlags + {slotProcessed}, restore)
+    of BeaconBlockFork.Altair:
+      state_transition(
+        dag.cfg, state.data, blck.data.altairBlock,
+        cache, rewards, flags + dag.updateFlags + {slotProcessed}, restore)
   if ok:
     state.blck = blck.refs
 

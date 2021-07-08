@@ -20,8 +20,9 @@ import
   eth/keys, eth/p2p/discoveryv5/[protocol, enr],
 
   # Local modules
+  ../spec/datatypes/[phase0, altair],
   ../spec/[
-    datatypes, digest, crypto, forkedbeaconstate_helpers, helpers, network,
+    digest, crypto, forkedbeaconstate_helpers, helpers, network,
     signatures, state_transition],
   ../conf, ../beacon_clock,
   ../consensus_object_pools/[
@@ -181,6 +182,8 @@ proc sendAttestation*(
 
   return case ok
     of ValidationResult.Accept:
+      # TODO altair: this probably is just a function of wallslot's altair, not
+      # attestation.data.slot?
       let forkPrefix = node.dag.forkDigestAtSlot(attestation.data.slot)
       node.network.broadcast(
         getAttestationTopic(forkPrefix, subnet_id),
@@ -235,17 +238,17 @@ proc sendSyncCommitteeContribution*(
       false
 
 proc sendVoluntaryExit*(node: BeaconNode, exit: SignedVoluntaryExit) =
-  # TODO altair-transition
+  # TODO altair-transition; well, low-priority, won't come up
   let exitsTopic = getVoluntaryExitsTopic(node.dag.forkDigests.phase0)
   node.network.broadcast(exitsTopic, exit)
 
 proc sendAttesterSlashing*(node: BeaconNode, slashing: AttesterSlashing) =
-  # TODO altair-transition
+  # TODO altair-transition; low-priority given that only API seems to do this
   let attesterSlashingsTopic = getAttesterSlashingsTopic(node.dag.forkDigests.phase0)
   node.network.broadcast(attesterSlashingsTopic, slashing)
 
 proc sendProposerSlashing*(node: BeaconNode, slashing: ProposerSlashing) =
-  # TODO altair-transition
+  # TODO altair-transition; low-priority given that only API seems to do this
   let proposerSlashingsTopic = getProposerSlashingsTopic(node.dag.forkDigests.phase0)
   node.network.broadcast(proposerSlashingsTopic, slashing)
 
@@ -348,7 +351,7 @@ proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
                                     validator_index: ValidatorIndex,
                                     graffiti: GraffitiBytes,
                                     head: BlockRef,
-                                    slot: Slot): Future[Option[BeaconBlock]] {.async.} =
+                                    slot: Slot): Future[Option[ForkedSignedBeaconBlock]] {.async.} =
   # Advance state to the slot that we're proposing for
 
   let
@@ -362,62 +365,123 @@ proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
 
     if eth1Proposal.hasMissingDeposits:
       error "Eth1 deposits not available. Skipping block proposal", slot
-      return none(BeaconBlock)
+      return none(ForkedSignedBeaconBlock)
 
-    func restore(v: var HashedBeaconState) =
-      # TODO address this ugly workaround - there should probably be a
-      #      `state_transition` that takes a `StateData` instead and updates
-      #      the block as well
-      doAssert v.addr == addr proposalStateAddr.data.hbsPhase0
-      assign(proposalStateAddr[], poolPtr.headState)
+    let doPhase0 = slot.epoch < node.dag.cfg.ALTAIR_FORK_EPOCH
+    if doPhase0:
+      func restore(v: var phase0.HashedBeaconState) =
+        # TODO address this ugly workaround - there should probably be a
+        #      `state_transition` that takes a `StateData` instead and updates
+        #      the block as well
+        doAssert v.addr == addr proposalStateAddr.data.hbsPhase0
+        assign(proposalStateAddr[], poolPtr.headState)
 
-    return makeBeaconBlock(
-      node.runtimePreset,
-      stateData.data.hbsPhase0,
-      validator_index,
-      head.root,
-      randao_reveal,
-      eth1Proposal.vote,
-      graffiti,
-      node.attestationPool[].getAttestationsForBlock(
-        stateData.data.hbsPhase0, cache),
-      eth1Proposal.deposits,
-      node.exitPool[].getProposerSlashingsForBlock(),
-      node.exitPool[].getAttesterSlashingsForBlock(),
-      node.exitPool[].getVoluntaryExitsForBlock(),
-      default(ExecutionPayload),
-      restore,
-      cache)
+      let optBlock = makeBeaconBlock(
+        node.dag.cfg,
+        stateData.data.hbsPhase0,
+        validator_index,
+        head.root,
+        randao_reveal,
+        eth1Proposal.vote,
+        graffiti,
+        node.attestationPool[].getAttestationsForBlock(
+          stateData.data.hbsPhase0, cache),
+        eth1Proposal.deposits,
+        node.exitPool[].getProposerSlashingsForBlock(),
+        node.exitPool[].getAttesterSlashingsForBlock(),
+        node.exitPool[].getVoluntaryExitsForBlock(),
+        default(ExecutionPayload),
+        restore,
+        cache)
+
+      if optBlock.isNone:
+        return none ForkedSignedBeaconBlock
+
+      return some ForkedSignedBeaconBlock(
+        kind: BeaconBlockFork.Phase0,
+        phase0Block: phase0.SignedBeaconBlock(message: optBlock.get))
+    else:
+      func restore(v: var altair.HashedBeaconState) =
+        # TODO address this ugly workaround - there should probably be a
+        #      `state_transition` that takes a `StateData` instead and updates
+        #      the block as well
+        doAssert v.addr == addr proposalStateAddr.data.hbsPhase0
+        assign(proposalStateAddr[], poolPtr.headState)
+
+      let optBlock = makeBeaconBlock(
+        node.dag.cfg,
+        stateData.data.hbsAltair,
+        validator_index,
+        head.root,
+        randao_reveal,
+        eth1Proposal.vote,
+        graffiti,
+        node.attestationPool[].getAttestationsForBlock(
+          stateData.data.hbsAltair, cache),
+        eth1Proposal.deposits,
+        node.exitPool[].getProposerSlashingsForBlock(),
+        node.exitPool[].getAttesterSlashingsForBlock(),
+        node.exitPool[].getVoluntaryExitsForBlock(),
+        default(ExecutionPayload),
+        restore,
+        cache)
+
+      if optBlock.isNone:
+        return none ForkedSignedBeaconBlock
+
+      return some ForkedSignedBeaconBlock(
+        kind: BeaconBlockFork.Altair,
+        altairBlock: altair.SignedBeaconBlock(message: optBlock.get))
 
 proc proposeSignedBlock*(node: BeaconNode,
                          head: BlockRef,
                          validator: AttachedValidator,
-                         newBlock: SignedBeaconBlock):
+                         newBlock: ForkedSignedBeaconBlock):
                          Future[BlockRef] {.async.} =
-  let newBlockRef = node.dag.addRawBlock(node.quarantine, newBlock) do (
-      blckRef: BlockRef, trustedBlock: TrustedSignedBeaconBlock,
-      epochRef: EpochRef):
-    # Callback add to fork choice if signed block valid (and becomes trusted)
-    node.attestationPool[].addForkChoice(
-      epochRef, blckRef, trustedBlock.message,
-      node.beaconClock.now().slotOrZero())
+  let newBlockRef =
+    case newBlock.kind:
+    of BeaconBlockFork.Phase0:
+      node.dag.addRawBlock(node.quarantine, newBlock.phase0Block) do (
+          blckRef: BlockRef, trustedBlock: phase0.TrustedSignedBeaconBlock,
+          epochRef: EpochRef):
+        # Callback add to fork choice if signed block valid (and becomes trusted)
+        node.attestationPool[].addForkChoice(
+          epochRef, blckRef, trustedBlock.message,
+          node.beaconClock.now().slotOrZero())
+    of BeaconBlockFork.Altair:
+      node.dag.addRawBlock(node.quarantine, newBlock.altairBlock) do (
+          blckRef: BlockRef, trustedBlock: altair.TrustedSignedBeaconBlock,
+          epochRef: EpochRef):
+        # Callback add to fork choice if signed block valid (and becomes trusted)
+        node.attestationPool[].addForkChoice(
+          epochRef, blckRef, trustedBlock.message,
+          node.beaconClock.now().slotOrZero())
 
   if newBlockRef.isErr:
-    warn "Unable to add proposed block to block pool",
-      newBlock = shortLog(newBlock.message),
-      blockRoot = shortLog(newBlock.root)
+    warn "Unable to add proposed block to block pool"
+      # TODO altair
+      #newBlock = shortLog(newBlock.message),
+      #blockRoot = shortLog(newBlock.root)
 
     return head
 
   notice "Block proposed",
-    blck = shortLog(newBlock.message),
+    # TODO altair
+    #blck = shortLog(newBlock.message),
     blockRoot = shortLog(newBlockRef[].root),
     validator = shortLog(validator)
 
-  if node.config.dumpEnabled:
-    dump(node.config.dumpDirOutgoing, newBlock)
+  # TODO altair
+  #if node.config.dumpEnabled:
+  #  dump(node.config.dumpDirOutgoing, newBlock)
 
-  node.network.broadcast(node.topicBeaconBlocks, newBlock)
+  case newBlock.kind:
+  of BeaconBlockFork.Phase0:
+    node.network.broadcast(
+      getBeaconBlocksTopic(node.dag.forkDigests.phase0), newBlock.phase0Block)
+  of BeaconBlockFork.Altair:
+    node.network.broadcast(
+      getBeaconBlocksTopic(node.dag.forkDigests.altair), newBlock.altairBlock)
 
   beacon_blocks_proposed.inc()
 
@@ -443,37 +507,58 @@ proc proposeBlock(node: BeaconNode,
       getStateField(node.dag.headState.data, genesis_validators_root)
     randao = await validator.genRandaoReveal(
       fork, genesis_validators_root, slot)
-    message = await makeBeaconBlockForHeadAndSlot(
-      node, randao, validator_index, node.graffitiBytes, head, slot)
+  var newBlock = await makeBeaconBlockForHeadAndSlot(
+    node, randao, validator_index, node.graffitiBytes, head, slot)
 
-  if not message.isSome():
+  if not newBlock.isSome():
     return head # already logged elsewhere!
 
-  var
-    newBlock = SignedBeaconBlock(
-      message: message.get()
-    )
+  template blck: untyped = newBlock.get
 
-  newBlock.root = hash_tree_root(newBlock.message)
+  # TODO abstract this, or move it into makeBeaconBlockForHeadAndSlot, and in
+  # general this is far too much copy/paste
+  case blck.kind:
+  of BeaconBlockFork.Phase0:
+    blck.phase0Block.root = hash_tree_root(blck.phase0Block.message)
 
-  # TODO: recomputed in block proposal
-  let signing_root = compute_block_root(
-    fork, genesis_validators_root, slot, newBlock.root)
-  let notSlashable = node.attachedValidators
-    .slashingProtection
-    .registerBlock(validator_index, validator.pubkey.toPubKey(), slot, signing_root)
+    # TODO: recomputed in block proposal
+    let signing_root = compute_block_root(
+      fork, genesis_validators_root, slot, blck.phase0Block.root)
+    let notSlashable = node.attachedValidators
+      .slashingProtection
+      .registerBlock(validator_index, validator.pubkey.toPubKey(), slot, signing_root)
 
-  if notSlashable.isErr:
-    warn "Slashing protection activated",
-      validator = validator.pubkey,
-      slot = slot,
-      existingProposal = notSlashable.error
-    return head
+    if notSlashable.isErr:
+      warn "Slashing protection activated",
+        validator = validator.pubkey,
+        slot = slot,
+        existingProposal = notSlashable.error
+      return head
 
-  newBlock.signature = await validator.signBlockProposal(
-    fork, genesis_validators_root, slot, newBlock.root)
+    blck.phase0Block.signature = await validator.signBlockProposal(
+      fork, genesis_validators_root, slot, blck.phase0Block.root)
 
-  return await node.proposeSignedBlock(head, validator, newBlock)
+  of BeaconBlockFork.Altair:
+    blck.altairBlock.root = hash_tree_root(blck.altairBlock.message)
+
+    # TODO: recomputed in block proposal
+    let signing_root = compute_block_root(
+      fork, genesis_validators_root, slot, blck.altairBlock.root)
+    let notSlashable = node.attachedValidators
+      .slashingProtection
+      .registerBlock(validator_index, validator.pubkey.toPubKey(), slot, signing_root)
+
+    if notSlashable.isErr:
+      warn "Slashing protection activated",
+        validator = validator.pubkey,
+        slot = slot,
+        existingProposal = notSlashable.error
+      return head
+
+    blck.altairBlock.signature = await validator.signBlockProposal(
+      fork, genesis_validators_root, slot, blck.altairBlock.root)
+
+  return await node.proposeSignedBlock(head, validator, blck)
 
 proc handleAttestations(node: BeaconNode, head: BlockRef, slot: Slot) =
   ## Perform all attestations that the validators attached to this node should
@@ -769,7 +854,9 @@ proc sendAggregatedAttestations(
       var signedAP = SignedAggregateAndProof(
         message: aggregateAndProof.get,
         signature: sig)
-      node.network.broadcast(node.topicAggregateAndProofs, signedAP)
+      # TODO altair
+      node.network.broadcast(
+        getAggregateAndProofsTopic(node.dag.forkDigests.phase0), signedAP)
       notice "Aggregated attestation sent",
         attestation = shortLog(signedAP.message.aggregate),
         validator = shortLog(curr[0].v),

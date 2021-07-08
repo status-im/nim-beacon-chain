@@ -310,7 +310,8 @@ proc installValidatorApiHandlers*(router: var RestRouter, node: BeaconNode) =
         return RestApiResponse.jsonError(Http400,
                                          AggregateAndProofValidationError,
                                          $res.error())
-      node.network.broadcast(node.topicAggregateAndProofs, item)
+      node.network.broadcast(
+        getAggregateAndProofsTopic(node.dag.forkDigests.phase0), item)
 
     return RestApiResponse.jsonError(Http200,
                                      AggregateAndProofValidationSuccess)

@@ -319,9 +319,6 @@ proc init*(T: type BeaconNode,
     network = createEth2Node(
       rng, config, netKeys, cfg, dag.forkDigests,
       getStateField(dag.headState.data, genesis_validators_root))
-    # TODO altair-transition
-    topicBeaconBlocks = getBeaconBlocksTopic(dag.forkDigests.phase0)
-    topicAggregateAndProofs = getAggregateAndProofsTopic(dag.forkDigests.phase0)
     attestationPool = newClone(AttestationPool.init(dag, quarantine))
     syncCommitteeMsgPool = newClone(SyncCommitteeMsgPool.init())
     exitPool = newClone(ExitPool.init(dag, quarantine))
@@ -373,8 +370,6 @@ proc init*(T: type BeaconNode,
     eth1Monitor: eth1Monitor,
     rpcServer: rpcServer,
     restServer: restServer,
-    topicBeaconBlocks: topicBeaconBlocks,
-    topicAggregateAndProofs: topicAggregateAndProofs,
     processor: processor,
     blockProcessor: blockProcessor,
     consensusManager: consensusManager,
@@ -384,17 +379,23 @@ proc init*(T: type BeaconNode,
   # set topic validation routine
   network.setValidTopics(
     block:
-      # TODO altair-transition
       var
         topics = @[
-            topicBeaconBlocks,
+            getBeaconBlocksTopic(dag.forkDigests.phase0),
             getAttesterSlashingsTopic(network.forkDigests.phase0),
             getProposerSlashingsTopic(network.forkDigests.phase0),
             getVoluntaryExitsTopic(network.forkDigests.phase0),
-            getAggregateAndProofsTopic(network.forkDigests.phase0)
+            getAggregateAndProofsTopic(network.forkDigests.phase0),
+
+            getBeaconBlocksTopic(dag.forkDigests.altair),
+            getAttesterSlashingsTopic(network.forkDigests.altair),
+            getProposerSlashingsTopic(network.forkDigests.altair),
+            getVoluntaryExitsTopic(network.forkDigests.altair),
+            getAggregateAndProofsTopic(network.forkDigests.altair)
           ]
       for subnet_id in 0'u64 ..< ATTESTATION_SUBNET_COUNT:
         topics &= getAttestationTopic(network.forkDigests.phase0, SubnetId(subnet_id))
+        topics &= getAttestationTopic(network.forkDigests.altair, SubnetId(subnet_id))
       topics)
 
   if node.config.inProcessValidators:
@@ -757,12 +758,24 @@ proc addMessageHandlers(node: BeaconNode) {.raises: [Defect, CatchableError].} =
     aggregateTopicParams.validateParameters().tryGet()
     basicParams.validateParameters.tryGet()
 
-  # TODO altair-transition
-  node.network.subscribe(node.topicBeaconBlocks, blocksTopicParams, enableTopicMetrics = true)
+  node.network.subscribe(getBeaconBlocksTopic(
+    node.dag.forkDigests.phase0), blocksTopicParams, enableTopicMetrics = true)
   node.network.subscribe(getAttesterSlashingsTopic(node.dag.forkDigests.phase0), basicParams)
   node.network.subscribe(getProposerSlashingsTopic(node.dag.forkDigests.phase0), basicParams)
   node.network.subscribe(getVoluntaryExitsTopic(node.dag.forkDigests.phase0), basicParams)
   node.network.subscribe(getAggregateAndProofsTopic(node.dag.forkDigests.phase0), aggregateTopicParams, enableTopicMetrics = true)
+
+  warn "FOO0: node.dag.forkDigests.altair",
+    fp0 = node.dag.forkDigests.phase0,
+    fA = node.dag.forkDigests.altair
+
+  node.network.subscribe(getBeaconBlocksTopic(
+    node.dag.forkDigests.altair), blocksTopicParams, enableTopicMetrics = true)
+  node.network.subscribe(getAttesterSlashingsTopic(node.dag.forkDigests.altair), basicParams)
+  node.network.subscribe(getProposerSlashingsTopic(node.dag.forkDigests.altair), basicParams)
+  node.network.subscribe(getVoluntaryExitsTopic(node.dag.forkDigests.altair), basicParams)
+  node.network.subscribe(getAggregateAndProofsTopic(node.dag.forkDigests.altair), aggregateTopicParams, enableTopicMetrics = true)
+
   node.subscribeAttestationSubnetHandlers()
 
 func getTopicSubscriptionEnabled(node: BeaconNode): bool =
@@ -772,16 +785,23 @@ proc removeMessageHandlers(node: BeaconNode) {.raises: [Defect, CatchableError].
   node.attestationSubnets.enabled = false
   doAssert not node.getTopicSubscriptionEnabled()
 
-  # TODO altair-transition
   node.network.unsubscribe(getBeaconBlocksTopic(node.dag.forkDigests.phase0))
   node.network.unsubscribe(getVoluntaryExitsTopic(node.dag.forkDigests.phase0))
   node.network.unsubscribe(getProposerSlashingsTopic(node.dag.forkDigests.phase0))
   node.network.unsubscribe(getAttesterSlashingsTopic(node.dag.forkDigests.phase0))
   node.network.unsubscribe(getAggregateAndProofsTopic(node.dag.forkDigests.phase0))
 
+  node.network.unsubscribe(getBeaconBlocksTopic(node.dag.forkDigests.altair))
+  node.network.unsubscribe(getVoluntaryExitsTopic(node.dag.forkDigests.altair))
+  node.network.unsubscribe(getProposerSlashingsTopic(node.dag.forkDigests.altair))
+  node.network.unsubscribe(getAttesterSlashingsTopic(node.dag.forkDigests.altair))
+  node.network.unsubscribe(getAggregateAndProofsTopic(node.dag.forkDigests.altair))
+
   for subnet_id in 0'u64 ..< ATTESTATION_SUBNET_COUNT:
     node.network.unsubscribe(
       getAttestationTopic(node.dag.forkDigests.phase0, SubnetId(subnet_id)))
+    node.network.unsubscribe(
+      getAttestationTopic(node.dag.forkDigests.altair, SubnetId(subnet_id)))
 
 proc setupDoppelgangerDetection(node: BeaconNode, slot: Slot) =
   # When another client's already running, this is very likely to detect
@@ -1213,7 +1233,7 @@ proc installMessageValidators(node: BeaconNode) =
   # These validators stay around the whole time, regardless of which specific
   # subnets are subscribed to during any given epoch.
 
-  # TODO altair-transition
+  # TODO altair-transition, well, without massive copy/pasting (extract to template or etc)
   for it in 0'u64 ..< ATTESTATION_SUBNET_COUNT.uint64:
     closureScope:
       let subnet_id = SubnetId(it)
@@ -1229,7 +1249,7 @@ proc installMessageValidators(node: BeaconNode) =
       node.processor.aggregateValidator(signedAggregateAndProof))
 
   node.network.addValidator(
-    node.topicBeaconBlocks,
+    getBeaconBlocksTopic(node.dag.forkDigests.phase0),
     proc (signedBlock: SignedBeaconBlock): ValidationResult =
       node.processor[].blockValidator(signedBlock))
 
@@ -1245,6 +1265,41 @@ proc installMessageValidators(node: BeaconNode) =
 
   node.network.addValidator(
     getVoluntaryExitsTopic(node.dag.forkDigests.phase0),
+    proc (signedVoluntaryExit: SignedVoluntaryExit): ValidationResult =
+      node.processor[].voluntaryExitValidator(signedVoluntaryExit))
+
+  # TODO copy/paste starts here; templatize whole thing
+  for it in 0'u64 ..< ATTESTATION_SUBNET_COUNT.uint64:
+    closureScope:
+      let subnet_id = SubnetId(it)
+      node.network.addAsyncValidator(
+        getAttestationTopic(node.dag.forkDigests.altair, subnet_id),
+        # This proc needs to be within closureScope; don't lift out of loop.
+        proc(attestation: Attestation): Future[ValidationResult] =
+          node.processor.attestationValidator(attestation, subnet_id))
+
+  node.network.addAsyncValidator(
+    getAggregateAndProofsTopic(node.dag.forkDigests.altair),
+    proc(signedAggregateAndProof: SignedAggregateAndProof): Future[ValidationResult] =
+      node.processor.aggregateValidator(signedAggregateAndProof))
+
+  node.network.addValidator(
+    getBeaconBlocksTopic(node.dag.forkDigests.altair),
+    proc (signedBlock: SignedBeaconBlock): ValidationResult =
+      node.processor[].blockValidator(signedBlock))
+
+  node.network.addValidator(
+    getAttesterSlashingsTopic(node.dag.forkDigests.altair),
+    proc (attesterSlashing: AttesterSlashing): ValidationResult =
+      node.processor[].attesterSlashingValidator(attesterSlashing))
+
+  node.network.addValidator(
+    getProposerSlashingsTopic(node.dag.forkDigests.altair),
+    proc (proposerSlashing: ProposerSlashing): ValidationResult =
+      node.processor[].proposerSlashingValidator(proposerSlashing))
+
+  node.network.addValidator(
+    getVoluntaryExitsTopic(node.dag.forkDigests.altair),
     proc (signedVoluntaryExit: SignedVoluntaryExit): ValidationResult =
       node.processor[].voluntaryExitValidator(signedVoluntaryExit))
 

@@ -1833,7 +1833,16 @@ proc subscribeAttestationSubnets*(
   for subnet_id, enabled in subnets:
     if enabled:
       node.subscribe(getAttestationTopic(
-        node.forkID.fork_digest, SubnetId(subnet_id)), TopicParams.init()) # don't score attestation subnets for now
+        node.forkDigests.phase0, SubnetId(subnet_id)), TopicParams.init()) # don't score attestation subnets for now
+      node.subscribe(getAttestationTopic(
+        node.forkDigests.altair, SubnetId(subnet_id)), TopicParams.init()) # don't score attestation subnets for now
+
+  # TODO altair
+  when false:
+    for subnet_id, enabled in subnets:
+      if enabled:
+        node.subscribe(getAttestationTopic(
+          node.forkID.fork_digest, SubnetId(subnet_id)), TopicParams.init()) # don't score attestation subnets for now
 
 proc unsubscribeAttestationSubnets*(
     node: Eth2Node, subnets: BitArray[ATTESTATION_SUBNET_COUNT]) {.
@@ -1841,10 +1850,19 @@ proc unsubscribeAttestationSubnets*(
   # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/p2p-interface.md#attestations-and-aggregation
   # nimbus won't score attestation subnets for now, we just rely on block and aggregate which are more stabe and reliable
 
+  # TODO altair
   for subnet_id, enabled in subnets:
     if enabled:
       node.unsubscribe(getAttestationTopic(
-        node.forkID.fork_digest, SubnetId(subnet_id)))
+        node.forkDigests.phase0, SubnetId(subnet_id)))
+      node.unsubscribe(getAttestationTopic(
+        node.forkDigests.altair, SubnetId(subnet_id)))
+
+  when false:
+    for subnet_id, enabled in subnets:
+      if enabled:
+        node.unsubscribe(getAttestationTopic(
+          node.forkID.fork_digest, SubnetId(subnet_id)))
 
 proc updateStabilitySubnetMetadata*(
     node: Eth2Node, attnets: BitArray[ATTESTATION_SUBNET_COUNT]) =

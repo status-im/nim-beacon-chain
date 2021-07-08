@@ -225,7 +225,7 @@ proc state_transition_block_aux(
     state: var SomeHashedBeaconState,
     signedBlock: phase0.SignedBeaconBlock | phase0.SigVerifiedSignedBeaconBlock |
                  phase0.TrustedSignedBeaconBlock | altair.SignedBeaconBlock |
-                 altair.SigVerifiedSignedBeaconBlock,
+                 altair.SigVerifiedSignedBeaconBlock | altair.TrustedSignedBeaconBlock,
     cache: var StateCache, flags: UpdateFlags): bool {.nbench.} =
   # Block updates - these happen when there's a new block being suggested
   # by the block proposer. Every actor in the network will update its state
@@ -274,7 +274,8 @@ proc state_transition_block*(
     state: var ForkedHashedBeaconState,
     signedBlock: phase0.SignedBeaconBlock | phase0.SigVerifiedSignedBeaconBlock |
                  phase0.TrustedSignedBeaconBlock |
-                 altair.SignedBeaconBlock | altair.SigVerifiedSignedBeaconBlock,
+                 altair.SignedBeaconBlock | altair.SigVerifiedSignedBeaconBlock |
+                 altair.TrustedSignedBeaconBlock,
     cache: var StateCache, flags: UpdateFlags,
     rollback: RollbackForkedHashedProc): bool {.nbench.} =
   ## `rollback` is called if the transition fails and the given state has been
@@ -303,7 +304,8 @@ proc state_transition*(
     cfg: RuntimeConfig,
     state: var ForkedHashedBeaconState,
     signedBlock: phase0.SignedBeaconBlock | phase0.SigVerifiedSignedBeaconBlock |
-                 phase0.TrustedSignedBeaconBlock | altair.SignedBeaconBlock,
+                 phase0.TrustedSignedBeaconBlock | altair.SignedBeaconBlock |
+                 altair.TrustedSignedBeaconBlock,
     cache: var StateCache, rewards: var RewardInfo, flags: UpdateFlags,
     rollback: RollbackForkedHashedProc): bool {.nbench.} =
   ## Apply a block to the state, advancing the slot counter as necessary. The

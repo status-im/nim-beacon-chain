@@ -514,7 +514,7 @@ suite "chain DAG finalization tests" & preset():
         assign(tmpStateData[], dag.headState)
         dag.updateStateData(tmpStateData[], cur.atSlot(cur.slot), false, cache)
         check:
-          dag.get(cur).data.message.state_root == getStateRoot(tmpStateData[].data)
+          dag.get(cur).data.phase0Block.message.state_root == getStateRoot(tmpStateData[].data)
           getStateRoot(tmpStateData[].data) == hash_tree_root(tmpStateData[].data)
         cur = cur.parent
 

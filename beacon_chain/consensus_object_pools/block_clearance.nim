@@ -285,6 +285,9 @@ proc addRawBlockKnownParent(
         signedBlock, dag.db.immutableValidators, dag.clearanceState.data, cache).isErr():
       # A PublicKey or Signature isn't on the BLS12-381 curve
       return err((ValidationResult.Reject, Invalid))
+    # TODO this seems to trip on the generated Altair blocks so far, when Altair blocks
+    # get switched over to, for local purposes when creating blocks then running them
+    # if false and not quarantine.batchVerify(sigs):
     if not quarantine.batchVerify(sigs):
       return err((ValidationResult.Reject, Invalid))
 

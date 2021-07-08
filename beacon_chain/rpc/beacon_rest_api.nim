@@ -559,17 +559,19 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
 
     return RestApiResponse.jsonResponse(
       (
-        root: bdata.data.root,
+        # TODO Altair insofar as it should detect the error condition rather
+        # than crashing. This API is only specified for phase 0
+        root: bdata.data.phase0Block.root,
         canonical: bdata.refs.isAncestorOf(node.dag.head),
         header: (
           message: (
-            slot: bdata.data.message.slot,
-            proposer_index: bdata.data.message.proposer_index,
-            parent_root: bdata.data.message.parent_root,
-            state_root: bdata.data.message.state_root,
-            body_root: bdata.data.message.body.hash_tree_root()
+            slot: bdata.data.phase0Block.message.slot,
+            proposer_index: bdata.data.phase0Block.message.proposer_index,
+            parent_root: bdata.data.phase0Block.message.parent_root,
+            state_root: bdata.data.phase0Block.message.state_root,
+            body_root: bdata.data.phase0Block.message.body.hash_tree_root()
           ),
-          signature: bdata.data.signature
+          signature: bdata.data.phase0Block.signature
         )
       )
     )
@@ -589,17 +591,19 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
 
     return RestApiResponse.jsonResponse(
       (
-        root: bdata.data.root,
+        # TODO for Altair, check that it's a phase 0 block and return error if
+        # not, since /v1/ APIs don't support Altair
+        root: bdata.data.phase0Block.root,
         canonical: bdata.refs.isAncestorOf(node.dag.head),
         header: (
           message: (
-            slot: bdata.data.message.slot,
-            proposer_index: bdata.data.message.proposer_index,
-            parent_root: bdata.data.message.parent_root,
-            state_root: bdata.data.message.state_root,
-            body_root: bdata.data.message.body.hash_tree_root()
+            slot: bdata.data.phase0Block.message.slot,
+            proposer_index: bdata.data.phase0Block.message.proposer_index,
+            parent_root: bdata.data.phase0Block.message.parent_root,
+            state_root: bdata.data.phase0Block.message.state_root,
+            body_root: bdata.data.phase0Block.message.body.hash_tree_root()
           ),
-          signature: bdata.data.signature
+          signature: bdata.data.phase0Block.signature
         )
       )
     )
@@ -626,14 +630,14 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
       return RestApiResponse.jsonError(Http503, BeaconNodeInSyncError)
 
     if head.slot >= blck.message.slot:
-      # TODO altair-transition
+      # TODO altair-transition, but not for immediate testnet-priority
       let blocksTopic = getBeaconBlocksTopic(node.dag.forkDigests.phase0)
       node.network.broadcast(blocksTopic, blck)
       return RestApiResponse.jsonError(Http202, BlockValidationError)
     else:
-      let res = await proposeSignedBlock(node, head, AttachedValidator(), blck)
+      let res = await proposeSignedBlock(node, head, AttachedValidator(), ForkedSignedBeaconBlock(kind: BeaconBlockFork.Phase0, phase0Block: blck))
       if res == head:
-        # TODO altair-transition
+        # TODO altair-transition, but not for immediate testnet-priority
         let blocksTopic = getBeaconBlocksTopic(node.dag.forkDigests.phase0)
         node.network.broadcast(blocksTopic, blck)
         return RestApiResponse.jsonError(Http202, BlockValidationError)
@@ -666,7 +670,8 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
         if res.isErr():
           return RestApiResponse.jsonError(Http404, BlockNotFoundError)
         res.get()
-    return RestApiResponse.jsonResponse((root: bdata.data.root))
+    # TODO check whether block is altair, and if so, return error
+    return RestApiResponse.jsonResponse((root: bdata.data.phase0Block.root))
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getBlockAttestations
   router.api(MethodGet,
@@ -681,8 +686,9 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
         if res.isErr():
           return RestApiResponse.jsonError(Http404, BlockNotFoundError)
         res.get()
+    # TODO check whether block is altair, and if so, return error
     return RestApiResponse.jsonResponse(
-      bdata.data.message.body.attestations.asSeq()
+      bdata.data.phase0Block.message.body.attestations.asSeq()
     )
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getPoolAttestations

@@ -230,7 +230,8 @@ p2pProtocol BeaconSync(version = 1,
         trace "wrote response block",
           slot = blocks[i].slot, roor = shortLog(blocks[i].root)
         let blk = dag.get(blocks[i]).data
-        await response.write(blk.asSigned)
+        # TODO Altair
+        await response.write(blk.phase0Block.asSigned)
 
       debug "Block range request done",
         peer, startSlot, count, reqStep, found = count - startIndex
@@ -259,7 +260,8 @@ p2pProtocol BeaconSync(version = 1,
       let blockRef = dag.getRef(blockRoots[i])
       if not isNil(blockRef):
         let blk = dag.get(blockRef).data
-        await response.write(blk.asSigned)
+        # TODO Altair
+        await response.write(blk.phase0Block.asSigned)
         inc found
 
     peer.updateRequestQuota(found.float * blockResponseCost)

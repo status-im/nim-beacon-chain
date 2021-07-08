@@ -506,6 +506,17 @@ proc validateAggregate*(
 
   return ok((attesting_indices, sig))
 
+# TODO if useful elsewhere, move to _helpers
+template getForkedBlockField(x, y: untyped): untyped =
+  case x.kind:
+  of BeaconBlockFork.Phase0: x.phase0Block.message.y
+  of BeaconBlockFork.Altair: x.altairBlock.message.y
+
+template getForkedBlockSignature(x: untyped): untyped =
+  case x.kind:
+  of BeaconBlockFork.Phase0: x.phase0Block.signature
+  of BeaconBlockFork.Altair: x.altairBlock.signature
+
 # https://github.com/ethereum/eth2.0-specs/blob/v1.0.1/specs/phase0/p2p-interface.md#beacon_block
 proc isValidBeaconBlock*(
        dag: ChainDAGRef, quarantine: QuarantineRef,
@@ -568,13 +579,14 @@ proc isValidBeaconBlock*(
 
   if not slotBlockRef.isNil:
     let blck = dag.get(slotBlockRef).data
-    if blck.message.proposer_index ==
+    # TODO abstractions
+    if getForkedBlockField(blck, proposer_index) ==
           signed_beacon_block.message.proposer_index and
-        blck.message.slot == signed_beacon_block.message.slot and
-        blck.signature.toRaw() != signed_beacon_block.signature.toRaw():
+        getForkedBlockField(blck, slot) == signed_beacon_block.message.slot and
+        getForkedBlockSignature(blck).toRaw() != signed_beacon_block.signature.toRaw():
       notice "block isn't first block with valid signature received for the proposer",
-        blckRef = slotBlockRef,
-        existing_block = shortLog(blck.message)
+        blckRef = slotBlockRef
+        #existing_block = shortLog(blck.message)
       return err((ValidationResult.Ignore, Invalid))
 
   # [IGNORE] The block's parent (defined by block.parent_root) has been seen

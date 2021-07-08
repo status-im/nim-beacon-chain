@@ -212,7 +212,7 @@ type
   BlockData* = object
     ## Body and graph in one
 
-    data*: phase0.TrustedSignedBeaconBlock # We trust all blocks we have a ref for
+    data*: ForkedTrustedSignedBeaconBlock # We trust all blocks we have a ref for
     refs*: BlockRef
 
   StateData* = object

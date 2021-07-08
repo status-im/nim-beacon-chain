@@ -79,8 +79,15 @@ proc init*(T: type AttestationPool, dag: ChainDAGRef, quarantine: QuarantineRef)
             epochRef.finalized_checkpoint.epoch)
         else:
           epochRef = dag.getEpochRef(blck, blck.slot.epoch)
-          forkChoice.process_block(
-            dag, epochRef, blck, dag.get(blck).data.message, blck.slot)
+          # TODO abstraction
+          let bdata = dag.get(blck).data
+          case bdata.kind:
+          of BeaconBlockFork.Phase0:
+            forkChoice.process_block(
+              dag, epochRef, blck, bdata.phase0Block.message, blck.slot)
+          of BeaconBlockFork.Altair:
+            forkChoice.process_block(
+              dag, epochRef, blck, bdata.altairBlock.message, blck.slot)
 
     doAssert status.isOk(), "Error in preloading the fork choice: " & $status.error
 
