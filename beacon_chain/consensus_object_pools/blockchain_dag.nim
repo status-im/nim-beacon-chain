@@ -983,6 +983,9 @@ proc syncSubcommittee*(syncCommittee: openarray[ValidatorIndex],
                        subnetId: SubnetId): seq[ValidatorIndex] =
   ## TODO Return a view type
   ## Unfortunately, this doesn't work as a template right now.
+  if syncCommittee.len == 0:
+    return @[]
+
   let
     startIdx = subnetId.int * SYNC_COMMITTEE_SIZE
     onePastEndIdx = min(startIdx + SYNC_COMMITTEE_SIZE, syncCommittee.len)
