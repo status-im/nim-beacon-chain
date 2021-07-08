@@ -422,6 +422,7 @@ proc makeBeaconBlockForHeadAndSlot*(node: BeaconNode,
         node.exitPool[].getProposerSlashingsForBlock(),
         node.exitPool[].getAttesterSlashingsForBlock(),
         node.exitPool[].getVoluntaryExitsForBlock(),
+        node.sync_committee_msg_pool[].produceSyncAggregate(head),
         default(ExecutionPayload),
         restore,
         cache)
