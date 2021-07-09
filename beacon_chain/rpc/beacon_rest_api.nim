@@ -22,27 +22,7 @@ logScope: topics = "rest_beaconapi"
 const
   # https://github.com/ethereum/eth2.0-APIs/blob/master/apis/beacon/states/validator_balances.yaml#L17
   # https://github.com/ethereum/eth2.0-APIs/blob/master/apis/beacon/states/validators.yaml#L17
-  MaximumValidatorIds = 30
-
-type
-  RestValidator* = object
-    index*: ValidatorIndex
-    balance*: string
-    status*: string
-    validator*: Validator
-
-  RestValidatorBalance* = object
-    index*: ValidatorIndex
-    balance*: string
-
-  RestBeaconStatesCommittees* = object
-    index*: CommitteeIndex
-    slot*: Slot
-    validators*: seq[ValidatorIndex]
-
-  RestAttestationsFailure* = object
-    index*: uint64
-    message*: string
+  MaximumValidatorIds* = 30
 
 proc validateFilter(filters: seq[ValidatorFilter]): Result[ValidatorFilter,
                                                            cstring] =
@@ -638,7 +618,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
         node.network.broadcast(blocksTopic, blck)
         return RestApiResponse.jsonError(Http202, BlockValidationError)
       else:
-        return RestApiResponse.jsonError(Http200, BlockValidationSuccess)
+        return RestApiResponse.jsonMsgResponse(BlockValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getBlock
   router.api(MethodGet, "/api/eth/v1/beacon/blocks/{block_id}") do (
@@ -729,6 +709,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
 
     var failures: seq[RestAttestationsFailure]
     for atindex, attestation in attestations.pairs():
+      debug "Attestation for pool", attestation = attestation, signature = $attestation.signature
       if not await node.sendAttestation(attestation):
         failures.add(RestAttestationsFailure(
           index: uint64(atindex), message: "Attestation failed validation"))
@@ -737,7 +718,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
       return RestApiResponse.jsonErrorList(Http400, AttestationValidationError,
                                            failures)
     else:
-      return RestApiResponse.jsonError(Http200, AttestationValidationSuccess)
+      return RestApiResponse.jsonMsgResponse(AttestationValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getPoolAttesterSlashings
   router.api(MethodGet, "/api/eth/v1/beacon/pool/attester_slashings") do (
@@ -771,7 +752,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
                                            $vres.error())
         res
     node.sendAttesterSlashing(slashing)
-    return RestApiResponse.jsonError(Http200, AttesterSlashingValidationSuccess)
+    return RestApiResponse.jsonMsgResponse(AttesterSlashingValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getPoolProposerSlashings
   router.api(MethodGet, "/api/eth/v1/beacon/pool/proposer_slashings") do (
@@ -805,7 +786,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
                                            $vres.error())
         res
     node.sendProposerSlashing(slashing)
-    return RestApiResponse.jsonError(Http200, ProposerSlashingValidationSuccess)
+    return RestApiResponse.jsonMsgResponse(ProposerSlashingValidationSuccess)
 
   # https://ethereum.github.io/eth2.0-APIs/#/Beacon/getPoolVoluntaryExits
   router.api(MethodGet, "/api/eth/v1/beacon/pool/voluntary_exits") do (
@@ -839,7 +820,7 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
                                            $vres.error())
         res
     node.sendVoluntaryExit(exit)
-    return RestApiResponse.jsonError(Http200, VoluntaryExitValidationSuccess)
+    return RestApiResponse.jsonMsgResponse(VoluntaryExitValidationSuccess)
 
   router.redirect(
     MethodGet,
@@ -951,3 +932,38 @@ proc installBeaconApiHandlers*(router: var RestRouter, node: BeaconNode) =
     "/eth/v1/beacon/pool/voluntary_exits",
     "/api/eth/v1/beacon/pool/voluntary_exits"
   )
+
+proc getBeaconGenesis*(): RestResponse[DataRestBeaconGenesis] {.
+     rest, endpoint: "/eth/v1/beacon/genesis",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getGenesis
+
+proc getStateFork*(state_id: StateIdent): RestResponse[DataRestFork] {.
+     rest, endpoint: "/eth/v1/beacon/states/{state_id}/fork",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateFork
+
+proc publishBlock*(body: SignedBeaconBlock): RestPlainResponse {.
+     rest, endpoint: "/eth/v1/beacon/blocks",
+     meth: MethodPost.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/publishBlock
+
+proc getStateValidator*(state_id: StateIdent,
+                        validator_id: ValidatorIdent
+                       ): RestResponse[DataRestValidator] {.
+     rest,
+     endpoint: "/eth/v1/beacon/states/{state_id}/validators/{validator_id}",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateValidator
+
+proc getStateValidators*(state_id: StateIdent,
+                         id: seq[ValidatorIdent]
+                        ): RestResponse[DataRestValidatorList] {.
+     rest, endpoint: "/eth/v1/beacon/states/{state_id}/validators",
+     meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/getStateValidators
+
+proc submitPoolAttestations*(body: seq[Attestation]): RestPlainResponse {.
+     rest, endpoint: "/eth/v1/beacon/pool/attestations",
+     meth: MethodPost.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Beacon/submitPoolAttestations

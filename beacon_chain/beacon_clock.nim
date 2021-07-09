@@ -9,7 +9,7 @@
 
 import
   chronos, chronicles,
-  ./spec/datatypes
+  ./spec/[datatypes, helpers]
 
 from times import Time, getTime, fromUnix, `<`, `-`, inNanoseconds
 
@@ -101,6 +101,20 @@ proc fromNow*(c: BeaconClock, t: BeaconTime): tuple[inFuture: bool, offset: Dura
 
 proc fromNow*(c: BeaconClock, slot: Slot): tuple[inFuture: bool, offset: Duration] =
   c.fromNow(slot.toBeaconTime())
+
+proc durationToNextSlot*(c: BeaconClock): Duration =
+  let (afterGenesis, slot) = c.now().toSlot()
+  if afterGenesis:
+    c.fromNow(Slot(slot) + 1'u64).offset
+  else:
+    c.fromNow(Slot(0)).offset
+
+proc durationToNextEpoch*(c: BeaconClock): Duration =
+  let (afterGenesis, slot) = c.now().toSlot()
+  if afterGenesis:
+    c.fromNow(compute_start_slot_at_epoch(slot.epoch() + 1'u64)).offset
+  else:
+    c.fromNow(compute_start_slot_at_epoch(Epoch(0))).offset
 
 func saturate*(d: tuple[inFuture: bool, offset: Duration]): Duration =
   if d.inFuture: d.offset else: seconds(0)

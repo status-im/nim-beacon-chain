@@ -1,4 +1,4 @@
-import presto,
+import presto, presto/client as presto_client,
        libp2p/peerid,
        stew/[base10, byteutils],
        faststreams/[outputs],
@@ -7,7 +7,7 @@ import presto,
        ../spec/[crypto, datatypes, digest, forkedbeaconstate_helpers],
        ../beacon_node_common,
        ../consensus_object_pools/[block_pools_types, blockchain_dag]
-export blockchain_dag, presto
+export blockchain_dag, presto, presto_client
 
 const
   DecimalSet = {'0' .. '9'}
@@ -75,6 +75,8 @@ const
     "rejected"
   AggregateAndProofValidationSuccess* =
     "Aggregate and proof object(s) was broadcasted"
+  BeaconCommitteeSubscriptionSuccess* =
+    "Beacon node processed committee subscription request"
   InvalidParentRootValueError* =
     "Invalid parent root value"
   MissingSlotValueError* =
@@ -567,3 +569,18 @@ proc toValidatorIndex*(value: RestValidatorIndex): Result[ValidatorIndex,
       err(ValidatorIndexError.TooHighValue)
   else:
     doAssert(false, "ValidatorIndex type size is incorrect")
+
+proc init*(t: typedesc[StateIdent], v: StateIdentType): StateIdent =
+  StateIdent(kind: StateQueryKind.Named, value: v)
+
+proc init*(t: typedesc[StateIdent], v: Slot): StateIdent =
+  StateIdent(kind: StateQueryKind.Slot, slot: v)
+
+proc init*(t: typedesc[StateIdent], v: Eth2Digest): StateIdent =
+  StateIdent(kind: StateQueryKind.Root, root: v)
+
+proc init*(t: typedesc[ValidatorIdent], v: ValidatorIndex): ValidatorIdent =
+  ValidatorIdent(kind: ValidatorQueryKind.Index, index: RestValidatorIndex(v))
+
+proc init*(t: typedesc[ValidatorIdent], v: ValidatorPubKey): ValidatorIdent =
+  ValidatorIdent(kind: ValidatorQueryKind.Key, key: v)

@@ -19,7 +19,7 @@ logScope: topics = "rest_config"
 
 func getDepositAddress(node: BeaconNode): string =
   if isNil(node.eth1Monitor):
-    ""
+    "0x0000000000000000000000000000000000000000"
   else:
     $node.eth1Monitor.depositContractAddress
 
@@ -182,3 +182,7 @@ proc installConfigApiHandlers*(router: var RestRouter, node: BeaconNode) =
     "/eth/v1/config/deposit_contract",
     "/api/eth/v1/config/deposit_contract"
   )
+
+proc getConfig*(): RestResponse[DataRestConfig] {.
+     rest, endpoint: "/eth/v1/config/spec", meth: MethodGet.}
+  ## https://ethereum.github.io/eth2.0-APIs/#/Config/getSpec

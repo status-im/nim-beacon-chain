@@ -1,18 +1,175 @@
 import
   std/[typetraits],
-  stew/[results, base10, byteutils],
+  stew/[results, base10, byteutils, endians2],
   chronicles, presto,
   faststreams/[outputs],
   serialization, json_serialization,
   nimcrypto/utils as ncrutils,
   ../beacon_node_common, ../networking/eth2_network,
   ../consensus_object_pools/[blockchain_dag, exit_pool],
-  ../spec/[crypto, digest, datatypes],
+  ../spec/[crypto, digest, datatypes, eth2_apis/callsigs_types],
   ../ssz/merkleization,
   rest_utils
 export json_serialization
 
 Json.createFlavor RestJson
+
+type
+  RestAttesterDuty* = object
+    pubkey*: ValidatorPubKey
+    validator_index*: ValidatorIndex
+    committee_index*: CommitteeIndex
+    committee_length*: uint64
+    committees_at_slot*: uint64
+    validator_committee_index*: ValidatorIndex
+    slot*: Slot
+
+  RestProposerDuty* = object
+    pubkey*: ValidatorPubKey
+    validator_index*: ValidatorIndex
+    slot*: Slot
+
+  RestCommitteeSubscription* = object
+    validator_index*: ValidatorIndex
+    committee_index*: CommitteeIndex
+    committees_at_slot*: uint64
+    slot*: Slot
+    is_aggregator*: bool
+
+  RestBeaconGenesis* = object
+    genesis_time*: uint64
+    genesis_validators_root*: Eth2Digest
+    genesis_fork_version*: Version
+
+  RestValidatorBalance* = object
+    index*: ValidatorIndex
+    balance*: string
+
+  RestBeaconStatesCommittees* = object
+    index*: CommitteeIndex
+    slot*: Slot
+    validators*: seq[ValidatorIndex]
+
+  RestAttestationsFailure* = object
+    index*: uint64
+    message*: string
+
+  RestValidator* = object
+    index*: ValidatorIndex
+    balance*: string
+    status*: string
+    validator*: Validator
+
+  RestVersion* = object
+    version*: string
+
+  RestSyncInfo* = object
+    head_slot*: Slot
+    sync_distance*: uint64
+    is_syncing*: bool
+
+  RestConfig* = object
+    CONFIG_NAME*: string
+    MAX_COMMITTEES_PER_SLOT*: uint64
+    TARGET_COMMITTEE_SIZE*: uint64
+    MAX_VALIDATORS_PER_COMMITTEE*: uint64
+    MIN_PER_EPOCH_CHURN_LIMIT*: uint64
+    CHURN_LIMIT_QUOTIENT*: uint64
+    SHUFFLE_ROUND_COUNT*: uint64
+    MIN_GENESIS_ACTIVE_VALIDATOR_COUNT*: uint64
+    MIN_GENESIS_TIME*: uint64
+    HYSTERESIS_QUOTIENT*: uint64
+    HYSTERESIS_DOWNWARD_MULTIPLIER*: uint64
+    HYSTERESIS_UPWARD_MULTIPLIER*: uint64
+    SAFE_SLOTS_TO_UPDATE_JUSTIFIED*: uint64
+    ETH1_FOLLOW_DISTANCE*: uint64
+    TARGET_AGGREGATORS_PER_COMMITTEE*: uint64
+    RANDOM_SUBNETS_PER_VALIDATOR*: uint64
+    EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION*: uint64
+    SECONDS_PER_ETH1_BLOCK*: uint64
+    DEPOSIT_CHAIN_ID*: uint64
+    DEPOSIT_NETWORK_ID*: uint64
+    DEPOSIT_CONTRACT_ADDRESS*: Eth1Address
+    MIN_DEPOSIT_AMOUNT*: uint64
+    MAX_EFFECTIVE_BALANCE*: uint64
+    EJECTION_BALANCE*: uint64
+    EFFECTIVE_BALANCE_INCREMENT*: uint64
+    GENESIS_FORK_VERSION*: Version
+    BLS_WITHDRAWAL_PREFIX*: byte
+    GENESIS_DELAY*: uint64
+    SECONDS_PER_SLOT*: uint64
+    MIN_ATTESTATION_INCLUSION_DELAY*: uint64
+    SLOTS_PER_EPOCH*: uint64
+    MIN_SEED_LOOKAHEAD*: uint64
+    MAX_SEED_LOOKAHEAD*: uint64
+    EPOCHS_PER_ETH1_VOTING_PERIOD*: uint64
+    SLOTS_PER_HISTORICAL_ROOT*: uint64
+    MIN_VALIDATOR_WITHDRAWABILITY_DELAY*: uint64
+    SHARD_COMMITTEE_PERIOD*: uint64
+    MIN_EPOCHS_TO_INACTIVITY_PENALTY*: uint64
+    EPOCHS_PER_HISTORICAL_VECTOR*: uint64
+    EPOCHS_PER_SLASHINGS_VECTOR*: uint64
+    HISTORICAL_ROOTS_LIMIT*: uint64
+    VALIDATOR_REGISTRY_LIMIT*: uint64
+    BASE_REWARD_FACTOR*: uint64
+    WHISTLEBLOWER_REWARD_QUOTIENT*: uint64
+    PROPOSER_REWARD_QUOTIENT*: uint64
+    INACTIVITY_PENALTY_QUOTIENT*: uint64
+    MIN_SLASHING_PENALTY_QUOTIENT*: uint64
+    PROPORTIONAL_SLASHING_MULTIPLIER*: uint64
+    MAX_PROPOSER_SLASHINGS*: uint64
+    MAX_ATTESTER_SLASHINGS*: uint64
+    MAX_ATTESTATIONS*: uint64
+    MAX_DEPOSITS*: uint64
+    MAX_VOLUNTARY_EXITS*: uint64
+    DOMAIN_BEACON_PROPOSER*: DomainType
+    DOMAIN_BEACON_ATTESTER*: DomainType
+    DOMAIN_RANDAO*: DomainType
+    DOMAIN_DEPOSIT*: DomainType
+    DOMAIN_VOLUNTARY_EXIT*: DomainType
+    DOMAIN_SELECTION_PROOF*: DomainType
+    DOMAIN_AGGREGATE_AND_PROOF*: DomainType
+
+  RestGenericError* = object
+    code*: uint64
+    message*: string
+    stacktraces*: Option[seq[string]]
+
+  RestAttestationError* = object
+    code*: uint64
+    message*: string
+    failures*: seq[RestAttestationsFailure]
+
+  DataEnclosedObject*[T] = object
+    data*: T
+
+  DataRootEnclosedObject*[T] = object
+    dependent_root*: Eth2Digest
+    data*: T
+
+  DataRestBeaconGenesis* = DataEnclosedObject[RestBeaconGenesis]
+  DataRestFork* = DataEnclosedObject[Fork]
+  DataRestProposerDuties* = DataRootEnclosedObject[seq[RestProposerDuty]]
+  DataRestAttesterDuties* = DataRootEnclosedObject[seq[RestAttesterDuty]]
+  DataRestBeaconBlock* = DataEnclosedObject[BeaconBlock]
+  DataRestAttestationData* = DataEnclosedObject[AttestationData]
+  DataRestAttestation* = DataEnclosedObject[Attestation]
+  DataRestSyncInfo* = DataEnclosedObject[RestSyncInfo]
+  DataRestValidator* = DataEnclosedObject[RestValidator]
+  DataRestValidatorList* = DataEnclosedObject[seq[RestValidator]]
+  DataRestVersion* = DataEnclosedObject[RestVersion]
+  DataRestConfig* = DataEnclosedObject[RestConfig]
+
+  EncodeTypes* = SignedBeaconBlock
+  EncodeArrays* = seq[ValidatorIndex] | seq[Attestation] |
+                  seq[SignedAggregateAndProof] | seq[RestCommitteeSubscription]
+
+  DecodeTypes* = DataRestBeaconGenesis | DataRestFork | DataRestProposerDuties |
+                 DataRestAttesterDuties | DataRestBeaconBlock |
+                 DataRestAttestationData | DataRestAttestation |
+                 DataRestSyncInfo | DataRestValidator |
+                 DataRestValidatorList | DataRestVersion |
+                 DataRestConfig | RestGenericError | RestAttestationError
 
 proc jsonResponseWRoot*(t: typedesc[RestApiResponse],
                         data: auto,
@@ -47,8 +204,57 @@ proc jsonResponseWMeta*(t: typedesc[RestApiResponse],
   RestApiResponse.response(stream.getOutput(seq[byte]), Http200,
                            "application/json")
 
+proc jsonMsgResponse*(t: typedesc[RestApiResponse],
+                      msg: string = ""): RestApiResponse =
+  let data =
+    block:
+      var default: seq[string]
+      var stream = memoryOutput()
+      var writer = JsonWriter[RestJson].init(stream)
+      writer.beginRecord()
+      writer.writeField("code", "200")
+      writer.writeField("message", msg)
+      writer.writeField("stacktrace", default)
+      writer.endRecord()
+      stream.getOutput(seq[byte])
+  RestApiResponse.response(data, Http200, "application/json")
+
 proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
-                msg: string = "", stacktrace: string = ""): RestApiResponse =
+                msg: string = ""): RestApiResponse =
+  let data =
+    block:
+      var default: seq[string]
+      var stream = memoryOutput()
+      var writer = JsonWriter[RestJson].init(stream)
+      writer.beginRecord()
+      writer.writeField("code", Base10.toString(uint64(status.toInt())))
+      writer.writeField("message", msg)
+      writer.writeField("stacktrace", default)
+      writer.endRecord()
+      stream.getOutput(string)
+  RestApiResponse.error(status, data, "application/json")
+
+proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
+                msg: string = "", stacktrace: string): RestApiResponse =
+  let data =
+    block:
+      var default: seq[string]
+      var stream = memoryOutput()
+      var writer = JsonWriter[RestJson].init(stream)
+      writer.beginRecord()
+      writer.writeField("code", Base10.toString(uint64(status.toInt())))
+      writer.writeField("message", msg)
+      if len(stacktrace) > 0:
+        writer.writeField("stacktrace", [stacktrace])
+      else:
+        writer.writeField("stacktrace", default)
+      writer.endRecord()
+      stream.getOutput(string)
+  RestApiResponse.error(status, data, "application/json")
+
+proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
+                msg: string = "",
+                stacktraces: openarray[string]): RestApiResponse =
   let data =
     block:
       var stream = memoryOutput()
@@ -56,8 +262,7 @@ proc jsonError*(t: typedesc[RestApiResponse], status: HttpCode = Http200,
       writer.beginRecord()
       writer.writeField("code", Base10.toString(uint64(status.toInt())))
       writer.writeField("message", msg)
-      if len(stacktrace) > 0:
-        writer.writeField("stacktrace", stacktrace)
+      writer.writeField("stacktrace", stacktraces)
       writer.endRecord()
       stream.getOutput(string)
   RestApiResponse.error(status, data, "application/json")
@@ -92,6 +297,40 @@ proc readValue*(reader: var JsonReader[RestJson], value: var uint64) {.
     value = res.get()
   else:
     reader.raiseUnexpectedValue($res.error())
+
+## byte
+proc writeValue*(w: var JsonWriter[RestJson], value: byte) =
+  var data: array[1, byte]
+  data[0] = value
+  writeValue(w, hexOriginal(data))
+
+proc readValue*(reader: var JsonReader[RestJson], value: var byte) {.
+     raises: [IOError, SerializationError, Defect].} =
+  var data: array[1, byte]
+  try:
+    hexToByteArray(reader.readValue(string), data)
+    value = data[0]
+  except ValueError:
+    raiseUnexpectedValue(reader,
+                         "byte value should be a valid hex string")
+
+## DomainType
+proc writeValue*(w: var JsonWriter[RestJson], value: DomainType) =
+  writeValue(w, hexOriginal(uint32(value).toBytesLE()))
+
+proc readValue*(reader: var JsonReader[RestJson], value: var DomainType) {.
+     raises: [IOError, SerializationError, Defect].} =
+  var data: array[4, byte]
+  try:
+    hexToByteArray(reader.readValue(string), data)
+    let res = uint32.fromBytesLE(data)
+    if res >= uint32(low(DomainType)) and res <= uint32(high(DomainType)):
+      value = cast[DomainType](res)
+    else:
+      raiseUnexpectedValue(reader, "Incorrect DomainType value")
+  except ValueError:
+    raiseUnexpectedValue(reader,
+                         "DomainType value should be a valid hex string")
 
 ## Slot
 proc writeValue*(writer: var JsonWriter[RestJson], value: Slot) {.
@@ -354,3 +593,77 @@ RestJson.useCustomSerialization(BeaconState.justification_bits):
                           "The `justification_bits` value must be a hex string")
   write:
     writer.writeValue "0x" & toHex([value])
+
+proc encodeBytes*[T: EncodeTypes](value: T,
+                                   contentType: string): RestResult[seq[byte]] =
+  case contentType
+  of "application/json":
+    var stream = memoryOutput()
+    var writer = JsonWriter[RestJson].init(stream)
+    writer.writeValue(value)
+    ok(stream.getOutput(seq[byte]))
+  else:
+    err("Content-Type not supported")
+
+proc encodeBytes*[T: EncodeArrays](value: T,
+                                   contentType: string): RestResult[seq[byte]] =
+  case contentType
+  of "application/json":
+    var stream = memoryOutput()
+    var writer = JsonWriter[RestJson].init(stream)
+    writer.writeArray(value)
+    ok(stream.getOutput(seq[byte]))
+  else:
+    err("Content-Type not supported")
+
+proc decodeBytes*[T: DecodeTypes](t: typedesc[T], value: openarray[byte],
+                                  contentType: string): RestResult[T] =
+  case contentType
+  of "application/json":
+    let res =
+      try:
+        RestJson.decode(value, T)
+      except SerializationError:
+        return err("Serialization error")
+    ok(res)
+  else:
+    err("Content-Type not supported")
+
+proc encodeString*(value: string): RestResult[string] =
+  ok(value)
+
+proc encodeString*(value: Epoch|Slot|CommitteeIndex): RestResult[string] =
+  ok(Base10.toString(uint64(value)))
+
+proc encodeString*(value: ValidatorSig): RestResult[string] =
+  ok(hexOriginal(toRaw(value)))
+
+proc encodeString*(value: GraffitiBytes): RestResult[string] =
+  ok(hexOriginal(distinctBase(value)))
+
+proc encodeString*(value: Eth2Digest): RestResult[string] =
+  ok(hexOriginal(value.data))
+
+proc encodeString*(value: ValidatorIdent): RestResult[string] =
+  case value.kind
+  of ValidatorQueryKind.Index:
+    ok(Base10.toString(uint64(value.index)))
+  of ValidatorQueryKind.Key:
+    ok(hexOriginal(toRaw(value.key)))
+
+proc encodeString*(value: StateIdent): RestResult[string] =
+  case value.kind
+  of StateQueryKind.Slot:
+    ok(Base10.toString(uint64(value.slot)))
+  of StateQueryKind.Root:
+    ok(hexOriginal(value.root.data))
+  of StateQueryKind.Named:
+    case value.value
+    of StateIdentType.Head:
+      ok("head")
+    of StateIdentType.Genesis:
+      ok("genesis")
+    of StateIdentType.Finalized:
+      ok("finalized")
+    of StateIdentType.Justified:
+      ok("justified")

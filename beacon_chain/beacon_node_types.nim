@@ -116,7 +116,7 @@ type
     pubKeyStr*: string
 
   AttachedValidator* = ref object
-    pubKey*: CookedPubKey
+    pubKey*: ValidatorPubKey
 
     case kind*: ValidatorKind
     of inProcess:

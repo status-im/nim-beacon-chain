@@ -1016,76 +1016,6 @@ proc onSlotStart(
 
   await onSlotEnd(node, wallSlot)
 
-proc runSlotLoop(node: BeaconNode, startTime: BeaconTime) {.async.} =
-  var
-    curSlot = startTime.slotOrZero()
-    nextSlot = curSlot + 1 # No earlier than GENESIS_SLOT + 1
-    timeToNextSlot = nextSlot.toBeaconTime() - startTime
-
-  info "Scheduling first slot action",
-    startTime = shortLog(startTime),
-    nextSlot = shortLog(nextSlot),
-    timeToNextSlot = shortLog(timeToNextSlot)
-
-  while true:
-    # Start by waiting for the time when the slot starts. Sleeping relinquishes
-    # control to other tasks which may or may not finish within the alotted
-    # time, so below, we need to be wary that the ship might have sailed
-    # already.
-    await sleepAsync(timeToNextSlot)
-
-    let
-      wallTime = node.dag.beaconClock.now()
-      wallSlot = wallTime.slotOrZero() # Always > GENESIS!
-
-    if wallSlot < nextSlot:
-      # While we were sleeping, the system clock changed and time moved
-      # backwards!
-      if wallSlot + 1 < nextSlot:
-        # This is a critical condition where it's hard to reason about what
-        # to do next - we'll call the attention of the user here by shutting
-        # down.
-        fatal "System time adjusted backwards significantly - clock may be inaccurate - shutting down",
-          nextSlot = shortLog(nextSlot),
-          wallSlot = shortLog(wallSlot)
-        bnStatus = BeaconNodeStatus.Stopping
-        return
-
-      # Time moved back by a single slot - this could be a minor adjustment,
-      # for example when NTP does its thing after not working for a while
-      warn "System time adjusted backwards, rescheduling slot actions",
-        wallTime = shortLog(wallTime),
-        nextSlot = shortLog(nextSlot),
-        wallSlot = shortLog(wallSlot)
-
-      # cur & next slot remain the same
-      timeToNextSlot = nextSlot.toBeaconTime() - wallTime
-      continue
-
-    if wallSlot > nextSlot + SLOTS_PER_EPOCH:
-      # Time moved forwards by more than an epoch - either the clock was reset
-      # or we've been stuck in processing for a long time - either way, we will
-      # skip ahead so that we only process the events of the last
-      # SLOTS_PER_EPOCH slots
-      warn "Time moved forwards by more than an epoch, skipping ahead",
-        curSlot = shortLog(curSlot),
-        nextSlot = shortLog(nextSlot),
-        wallSlot = shortLog(wallSlot)
-
-      curSlot = wallSlot - SLOTS_PER_EPOCH
-
-    elif wallSlot > nextSlot:
-        notice "Missed expected slot start, catching up",
-          delay = shortLog(wallTime - nextSlot.toBeaconTime()),
-          curSlot = shortLog(curSlot),
-          nextSlot = shortLog(curSlot)
-
-    await onSlotStart(node, wallTime, curSlot)
-
-    curSlot = wallSlot
-    nextSlot = wallSlot + 1
-    timeToNextSlot = saturate(node.dag.beaconClock.fromNow(nextSlot))
-
 proc handleMissingBlocks(node: BeaconNode) =
   let missingBlocks = node.quarantine.checkMissing()
   if missingBlocks.len > 0:
@@ -1247,7 +1177,7 @@ proc run*(node: BeaconNode) {.raises: [Defect, CatchableError].} =
     node.installMessageValidators()
 
     let startTime = node.dag.beaconClock.now()
-    asyncSpawn runSlotLoop(node, startTime)
+    asyncSpawn runSlotLoop(node, startTime, onSlotStart)
     asyncSpawn runOnSecondLoop(node)
     asyncSpawn runQueueProcessingLoop(node.blockProcessor)
 

@@ -67,17 +67,12 @@ proc findValidator(validators: auto, pubKey: ValidatorPubKey):
     some(idx.ValidatorIndex)
 
 proc addLocalValidator(node: BeaconNode,
-                       validators: openArray[Validator],
                        privKey: ValidatorPrivKey) =
-  let pubKey = privKey.toPubKey()
-  node.attachedValidators[].addLocalValidator(
-    pubKey, privKey,
-    findValidator(validators, pubKey.toPubKey()))
+  node.attachedValidators[].addLocalValidator(privKey)
 
 proc addLocalValidators*(node: BeaconNode) =
   for validatorKey in node.config.validatorKeys:
-    node.addLocalValidator(
-      getStateField(node.dag.headState.data, validators).asSeq, validatorKey)
+    node.addLocalValidator(validatorKey)
 
 proc addRemoteValidators*(node: BeaconNode) {.raises: [Defect, OSError, IOError].} =
   # load all the validators from the child process - loop until `end`
@@ -90,14 +85,14 @@ proc addRemoteValidators*(node: BeaconNode) {.raises: [Defect, OSError, IOError]
           getStateField(node.dag.headState.data, validators).asSeq, key)
         pk = key.load()
       if pk.isSome():
-        let v = AttachedValidator(pubKey: pk.get(),
+        let v = AttachedValidator(pubKey: key,
                                   index: index,
                                   kind: ValidatorKind.remote,
                                   connection: ValidatorConnection(
                                     inStream: node.vcProcess.inputStream,
                                     outStream: node.vcProcess.outputStream,
                                     pubKeyStr: $key))
-        node.attachedValidators[].addRemoteValidator(pk.get(), v)
+        node.attachedValidators[].addRemoteValidator(key, v)
       else:
         warn "Could not load public key", line
 
@@ -239,7 +234,8 @@ proc createAndSendAttestation(node: BeaconNode,
       return
 
     if node.config.dumpEnabled:
-      dump(node.config.dumpDirOutgoing, attestation.data, validator.pubKey.toPubKey())
+      dump(node.config.dumpDirOutgoing, attestation.data,
+           validator.pubKey)
 
     let wallTime = node.beaconClock.now()
     let deadline = attestationData.slot.toBeaconTime() +
@@ -415,7 +411,7 @@ proc proposeBlock(node: BeaconNode,
     fork, genesis_validators_root, slot, newBlock.root)
   let notSlashable = node.attachedValidators
     .slashingProtection
-    .registerBlock(validator_index, validator.pubkey.toPubKey(), slot, signing_root)
+    .registerBlock(validator_index, validator.pubkey, slot, signing_root)
 
   if notSlashable.isErr:
     warn "Slashing protection activated",
@@ -487,7 +483,7 @@ proc handleAttestations(node: BeaconNode, head: BlockRef, slot: Slot) =
           .slashingProtection
           .registerAttestation(
             validator_index,
-            validator.pubkey.toPubKey(),
+            validator.pubkey,
             data.source.epoch,
             data.target.epoch,
             signing_root)
