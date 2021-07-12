@@ -34,7 +34,7 @@ If you're concerned about missing an attestation or proposal, wait until `nextAc
 You can also use the `nimbus-eth2` [API](./api.md). For example, to check if your validator has a next Proposal slot assigned, run:
 
 ```
-curl -d '{"jsonrpc":"2.0","method":"get_v1_validator_duties_proposer","params":[${HEAD_EPOCH_NUMBER}],"id":1}' -H 'Content-Type: application/json' localhost:9190 -s | jq ".result[]" | grep ${PATTERN_WHICH_MATCHES_VALIDATOR_PUBLIC_KEYS}
+curl -d '{"jsonrpc":"2.0","method":"get_v1_validator_duties_proposer","params":[${head}],"id":1}' -H 'Content-Type: application/json' localhost:9190 -s | jq ".result[]" | grep ${PATTERN_WHICH_MATCHES_VALIDATOR_PUBLIC_KEYS}
 ```
 
 
