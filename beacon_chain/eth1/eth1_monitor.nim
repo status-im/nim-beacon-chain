@@ -236,42 +236,14 @@ template finalizedDepositsMerkleizer(m: Eth1Monitor): auto =
   m.eth1Chain.finalizedDepositsMerkleizer
 
 proc fixupWeb3Urls*(web3Url: var string) =
-  ## Converts HTTP and HTTPS Infura URLs to their WebSocket equivalents
-  ## because we are missing a functional HTTPS client.
   let normalizedUrl = toLowerAscii(web3Url)
-  var pos = 0
-
-  template skip(x: string): bool {.dirty.} =
-    if normalizedUrl.len - pos >= x.len and
-       normalizedUrl.toOpenArray(pos, pos + x.len - 1) == x:
-      pos += x.len
-      true
-    else:
-      false
-
-  if not (skip("https://") or skip("http://")):
-    if not (skip("ws://") or skip("wss://")):
-      web3Url = "ws://" & web3Url
-      warn "The Web3 URL does not specify a protocol. Assuming a WebSocket server", web3Url
+  if not (normalizedUrl.startsWith("https://") or
+          normalizedUrl.startsWith("http://") or
+          normalizedUrl.startsWith("wss://") or
+          normalizedUrl.startsWith("ws://")):
+    web3Url = "ws://" & web3Url
+    warn "The Web3 URL does not specify a protocol. Assuming a WebSocket server", web3Url
     return
-
-  block infuraRewrite:
-    var pos = pos
-    let network = if skip("mainnet"): mainnet
-                  elif skip("goerli"): goerli
-                  else: break
-
-    if not skip(".infura.io/v3/"):
-      break
-
-    template infuraKey: string = normalizedUrl.substr(pos)
-
-    web3Url = "wss://" & $network & ".infura.io/ws/v3/" & infuraKey
-    return
-
-  block gethRewrite:
-    web3Url = "ws://" & normalizedUrl.substr(pos)
-    warn "Only WebSocket web3 providers are supported. Rewriting URL", web3Url
 
 template toGaugeValue(x: Quantity): int64 =
   toGaugeValue(distinctBase x)
