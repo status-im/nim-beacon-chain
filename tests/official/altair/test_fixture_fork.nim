@@ -43,5 +43,7 @@ proc runTest(identifier: string) =
   `testImpl _ fork _ identifier`()
 
 suite "Official - Altair - Fork " & preset():
-  for kind, path in walkDir(OpForkDir, relative = true, checkDir = true):
-    runTest(path)
+  # TODO investigate and fix in miminal presets
+  when const_preset == "mainnet":
+    for kind, path in walkDir(OpForkDir, relative = true, checkDir = true):
+      runTest(path)

@@ -150,6 +150,7 @@ libbacktrace:
 XML_TEST_BINARIES := \
 	test_fixture_ssz_generic_types \
 	all_fixtures_require_ssz \
+	all_fixtures_require_ssz_minimal \
 	test_official_interchange_vectors \
 	all_tests \
 	test_keystore
@@ -179,6 +180,14 @@ all_fixtures_require_ssz: | build deps
 			$@ \
 			"tests/official/$@.nim" \
 			$(NIM_PARAMS) -d:chronicles_log_level=TRACE -d:const_preset=mainnet -d:chronicles_sinks="json[file]" && \
+		echo -e $(BUILD_END_MSG) "build/$@"
+
+all_fixtures_require_ssz_minimal: | build deps
+	+ echo -e $(BUILD_MSG) "build/$@" && \
+		MAKE="$(MAKE)" V="$(V)" $(ENV_SCRIPT) scripts/compile_nim_program.sh \
+			$@ \
+			"tests/official/all_fixtures_require_ssz.nim" \
+			$(NIM_PARAMS) -d:chronicles_log_level=TRACE -d:const_preset=minimal -d:chronicles_sinks="json[file]" && \
 		echo -e $(BUILD_END_MSG) "build/$@"
 
 # EIP-3076 - Slashing interchange
