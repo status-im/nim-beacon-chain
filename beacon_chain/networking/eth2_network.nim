@@ -38,7 +38,7 @@ import
   ../spec/datatypes/base,
   ../spec/[digest, network, helpers, forkedbeaconstate_helpers],
   ../validators/keystore_management,
-  ./eth2_discovery, ./peer_pool, ./libp2p_json_serialization
+  ./eth2_discovery, ./peer_pool, ./libp2p_json_serialization, ./peer_balancer
 
 from ../spec/datatypes/altair import nil
 
@@ -89,6 +89,10 @@ type
     rng*: ref BrHmacDrbgContext
     peers*: Table[PeerID, Peer]
     validTopics: HashSet[string]
+    peerBalancer: PeerBalancer
+    peerPingerHeartbeatFut: Future[void]
+    attnetsPeerGroups: seq[PeerGroup]
+    eth2PeerGroup: PeerGroup
 
   EthereumNode = Eth2Node # needed for the definitions in p2p_backends_helpers
 
@@ -108,6 +112,8 @@ type
     lastReqTime*: Moment
     connections*: int
     enr*: Option[enr.Record]
+    metadata*: Option[MetaData]
+    lastMetadataTime*: Moment
     direction*: PeerType
     disconnectedFut: Future[void]
 
@@ -900,12 +906,18 @@ proc toPeerAddr(node: Node): Result[PeerAddr, cstring] {.raises: [Defect].} =
 proc queryRandom*(d: Eth2DiscoveryProtocol, forkId: ENRForkID,
     attnets: BitArray[ATTESTATION_SUBNET_COUNT]):
     Future[seq[PeerAddr]] {.async, raises: [Defect].} =
-  ## Perform a discovery query for a random target matching the eth2 field
-  ## (forkId) and matching at least one of the attestation subnets.
-  let nodes = await d.queryRandom()
+  ## Perform a discovery query for a random target
+  ## and sort for maximum (attnets) coverage
+
+  let queryFut = d.queryRandom()
+  let querySuccedeed = await queryFut.withTimeout(10.seconds)
+  if not querySuccedeed:
+    return newSeq[PeerAddr]()
+
+  let nodes = await queryFut
   let eth2Field = SSZ.encode(forkId)
 
-  var filtered: seq[PeerAddr]
+  var filtered: seq[(int, PeerAddr)]
   for n in nodes:
     if n.record.contains(("eth2", eth2Field)):
       let res = n.record.tryGet("attnets", seq[byte])
@@ -919,45 +931,58 @@ proc queryRandom*(d: Eth2DiscoveryProtocol, forkId: ENRForkID,
               peer = n.record.toURI(), exception = e.name, msg = e.msg
             continue
 
+        var score: int = 0
         for i in 0..<attnetsNode.bytes.len:
           if (attnets.bytes[i] and attnetsNode.bytes[i]) > 0:
-            # we have at least one subnet match
-            let peerAddr = n.toPeerAddr()
-            if peerAddr.isOk():
-              filtered.add(peerAddr.get())
-            break
+            inc score
 
-  return filtered
+        let peerAddr = n.toPeerAddr()
+        if peerAddr.isOk():
+          filtered.add((score, peerAddr.get()))
+
+  d.rng[].shuffle(filtered)
+  return filtered.sortedByIt(it[0]).mapIt(it[1])
+
+proc getLowAttnets(node: Eth2Node): (int, BitArray[ATTESTATION_SUBNET_COUNT]) =
+  var
+    lowSubnetsCount = 0
+    lowSubnets: BitArray[ATTESTATION_SUBNET_COUNT]
+
+  for i in 0..<node.attnetsPeerGroups.len():
+    if node.attnetsPeerGroups[i].isLow():
+      inc lowSubnetsCount
+      lowSubnets.setBit(i)
+  return (lowSubnetsCount, lowSubnets)
 
 proc runDiscoveryLoop*(node: Eth2Node) {.async.} =
   debug "Starting discovery loop"
-  let enrField = ("eth2", SSZ.encode(node.forkId))
 
   while true:
-    if node.switch.connManager.outSema.count > 0:
-      var discoveredNodes = await node.discovery.queryRandom(enrField)
+    let (lowAttnetsCount, wantedAttnets) = node.getLowAttnets()
+
+    if node.switch.connManager.outSema.count > 0 or lowAttnetsCount > 0:
+      var discoveredNodes = await node.discovery.queryRandom(node.forkId, wantedAttnets)
+
+      if node.switch.connManager.outSema.count == 0 and lowAttnetsCount > 0:
+        #We're full of bad peers, kick a few ones
+        await node.peerBalancer.trimConnections(2)
+
       var newPeers = 0
-      for discNode in discoveredNodes:
-        let res = discNode.toPeerAddr()
-        if res.isOk():
-          let peerAddr = res.get()
-          # Waiting for an empty space in PeerPool.
-          while true:
-            if node.peerPool.lenSpace({PeerType.Outgoing}) == 0:
-              await node.peerPool.waitForEmptySpace(PeerType.Outgoing)
-            else:
-              break
-          # Check if peer present in SeenTable or PeerPool.
-          if node.checkPeer(peerAddr):
-            if peerAddr.peerId notin node.connTable:
-              # We adding to pending connections table here, but going
-              # to remove it only in `connectWorker`.
-              node.connTable.incl(peerAddr.peerId)
-              await node.connQueue.addLast(peerAddr)
-              inc(newPeers)
-        else:
-          debug "Failed to decode discovery's node address",
-                node = discnode, errMsg = res.error
+      for peerAddr in discoveredNodes:
+        # Waiting for an empty space in PeerPool.
+        while true:
+          if node.peerPool.lenSpace({PeerType.Outgoing}) == 0:
+            await node.peerPool.waitForEmptySpace(PeerType.Outgoing)
+          else:
+            break
+        # Check if peer present in SeenTable or PeerPool.
+        if node.checkPeer(peerAddr):
+          if peerAddr.peerId notin node.connTable:
+            # We adding to pending connections table here, but going
+            # to remove it only in `connectWorker`.
+            node.connTable.incl(peerAddr.peerId)
+            await node.connQueue.addLast(peerAddr)
+            inc(newPeers)
 
       debug "Discovery tick", wanted_peers = node.wantedPeers,
             space = node.peerPool.shortLogSpace(),
@@ -1162,7 +1187,15 @@ proc new*(T: type Eth2Node, config: BeaconNodeConf,
     rng: rng,
     connectTimeout: connectTimeout,
     seenThreshold: seenThreshold,
+    peerBalancer: PeerBalancer.new(switch, config.maxPeers)
   )
+
+  const
+    scorePerProtocol = 1_000_000
+    scorePerAttnet = scorePerProtocol div ATTESTATION_SUBNET_COUNT
+  for attnet in 0..<metadata.attnets.len():
+    node.attnetsPeerGroups.add(node.peerBalancer.addGroup("attnet_"  & $attnet, scorePerAttnet, 8))
+  node.eth2PeerGroup = node.peerBalancer.addGroup("eth2", scorePerAttnet)
 
   newSeq node.protocolStates, allProtocols.len
   for proto in allProtocols:
@@ -1203,55 +1236,13 @@ proc startListening*(node: Eth2Node) {.async.} =
 
   await node.pubsub.start()
 
-proc start*(node: Eth2Node) {.async.} =
-
-  proc onPeerCountChanged() =
-    trace "Number of peers has been changed",
-          space = node.peerPool.shortLogSpace(),
-          acquired = node.peerPool.shortLogAcquired(),
-          available = node.peerPool.shortLogAvailable(),
-          current = node.peerPool.shortLogCurrent(),
-          length = len(node.peerPool)
-    nbc_peers.set int64(len(node.peerPool))
-
-  node.peerPool.setPeerCounter(onPeerCountChanged)
-
-  for i in 0 ..< ConcurrentConnections:
-    node.connWorkers.add connectWorker(node, i)
-
-  if node.discoveryEnabled:
-    node.discovery.start()
-    traceAsyncErrors node.runDiscoveryLoop()
-  else:
-    notice "Discovery disabled; trying bootstrap nodes",
-      nodes = node.discovery.bootstrapRecords.len
-    for enr in node.discovery.bootstrapRecords:
-      let tr = enr.toTypedRecord()
-      if tr.isOk():
-        let pa = tr.get().toPeerAddr(tcpProtocol)
-        if pa.isOk():
-          await node.connQueue.addLast(pa.get())
-
-proc stop*(node: Eth2Node) {.async.} =
-  # Ignore errors in futures, since we're shutting down (but log them on the
-  # TRACE level, if a timeout is reached).
-  let
-    waitedFutures = @[
-      node.discovery.closeWait(),
-      node.switch.stop(),
-    ]
-    timeout = 5.seconds
-    completed = await withTimeout(allFutures(waitedFutures), timeout)
-  if not completed:
-    trace "Eth2Node.stop(): timeout reached", timeout,
-      futureErrors = waitedFutures.filterIt(it.error != nil).mapIt(it.error.msg)
-
 proc init*(T: type Peer, network: Eth2Node, info: PeerInfo): Peer =
   let res = Peer(
     info: info,
     network: network,
     connectionState: ConnectionState.None,
     lastReqTime: now(chronos.Moment),
+    lastMetadataTime: now(chronos.Moment),
     protocolStates: newSeq[RootRef](len(allProtocols))
   )
   for i in 0 ..< len(allProtocols):
@@ -1384,6 +1375,108 @@ proc p2pProtocolBackendImpl*(p: P2PProtocol): Backend =
 
   result.implementProtocolInit = proc (p: P2PProtocol): NimNode =
     return newCall(initProtocol, newLit(p.name), p.peerInit, p.netInit)
+
+#Must import here because of cyclicity
+import ../sync/sync_protocol
+
+proc updatePeerMetadata*(node: Eth2Node, peerId: PeerID) {.async.} =
+  trace "updating peer metadata", peerId
+
+  const emptyBytes = newSeq[byte](0)
+  var peer = node.getPeer(peerId)
+  let
+    oldMetadata = peer.metadata
+    response = await peer.getMetaData()
+
+  if response.isErr:
+    debug "Failed to retrieve metadata from peer!", peerId
+    return
+
+  let newMetadata = response.get()
+  peer.metadata = some(newMetadata)
+  peer.lastMetadataTime = Moment.now()
+
+  # This peer will now be managed by the peerbalancer
+  peer.network.eth2PeerGroup.addPeer(peer.info.peerId)
+
+  for bit in 0..<newMetadata.attnets.len:
+    if newMetadata.attnets[bit]:
+      node.attnetsPeerGroups[bit].addPeer(peerId)
+    elif oldMetadata.isSome and oldMetadata.get().attnets[bit] == true:
+      node.attnetsPeerGroups[bit].removePeer(peerId)
+
+proc peerPingerHeartbeat*(node: Eth2Node) {.async.} =
+  while true:
+    let heartbeatStart_m = Moment.now()
+    var updateFutures: seq[Future[void]]
+
+    for peer in node.peers.values:
+      if peer.connectionState != Connected: continue
+
+      if peer.metadata.isNone or
+        heartbeatStart_m - peer.lastMetadataTime > 30.minutes:
+        updateFutures.add(node.updatePeerMetadata(peer.info.peerId))
+
+    discard await allFinished(updateFutures)
+
+    for peer in node.peers.values:
+      if peer.connectionState != Connected: continue
+      let lastMetadata =
+        if peer.metadata.isNone:
+          peer.lastMetadataTime
+        else:
+          peer.lastMetadataTime + 30.minutes
+
+      if heartbeatStart_m - lastMetadata > 30.seconds:
+        debug "no metadata for 30 seconds, kicking peer", peer
+        asyncSpawn peer.disconnect(PeerScoreLow)
+
+    await sleepAsync(15.seconds)
+
+proc start*(node: Eth2Node) {.async.} =
+
+  proc onPeerCountChanged() =
+    trace "Number of peers has been changed",
+          space = node.peerPool.shortLogSpace(),
+          acquired = node.peerPool.shortLogAcquired(),
+          available = node.peerPool.shortLogAvailable(),
+          current = node.peerPool.shortLogCurrent(),
+          length = len(node.peerPool)
+    nbc_peers.set int64(len(node.peerPool))
+
+  node.peerPool.setPeerCounter(onPeerCountChanged)
+
+  for i in 0 ..< ConcurrentConnections:
+    node.connWorkers.add connectWorker(node, i)
+
+  if node.discoveryEnabled:
+    node.discovery.start()
+    traceAsyncErrors node.runDiscoveryLoop()
+  else:
+    notice "Discovery disabled; trying bootstrap nodes",
+      nodes = node.discovery.bootstrapRecords.len
+    for enr in node.discovery.bootstrapRecords:
+      let tr = enr.toTypedRecord()
+      if tr.isOk():
+        let pa = tr.get().toPeerAddr(tcpProtocol)
+        if pa.isOk():
+          await node.connQueue.addLast(pa.get())
+  node.peerPingerHeartbeatFut = node.peerPingerHeartbeat()
+
+proc stop*(node: Eth2Node) {.async.} =
+  # Ignore errors in futures, since we're shutting down (but log them on the
+  # TRACE level, if a timeout is reached).
+  let
+    waitedFutures = @[
+      node.discovery.closeWait(),
+      node.switch.stop(),
+      node.peerPingerHeartbeatFut.cancelAndWait()
+    ]
+    timeout = 5.seconds
+    completed = await withTimeout(allFutures(waitedFutures), timeout)
+  if not completed:
+    trace "Eth2Node.stop(): timeout reached", timeout,
+      futureErrors = waitedFutures.filterIt(it.error != nil).mapIt(it.error.msg)
 
 func asLibp2pKey*(key: keys.PublicKey): PublicKey =
   PublicKey(scheme: Secp256k1, skkey: secp.SkPublicKey(key))

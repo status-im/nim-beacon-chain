@@ -115,7 +115,8 @@ suite "Eth2 specific discovery tests":
 
     block:
       let discovered = await node1.queryRandom(enrForkId, attnetsSelected)
-      check discovered.len == 0
+      #TODO the new queryRandom only sort and doesn't filter
+      #check discovered.len == 0
 
     block:
       attnets.setBit(2)
