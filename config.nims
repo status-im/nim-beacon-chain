@@ -81,7 +81,7 @@ switch("define", "withoutPCRE")
 
 switch("import", "testutils/moduletests")
 
-const useLibStackTrace = not defined(windows) and
+const useLibStackTrace = not (defined(windows) and defined(i386)) and
                          not defined(disable_libbacktrace)
 
 when useLibStackTrace:

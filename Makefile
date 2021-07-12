@@ -116,11 +116,7 @@ all: | $(TOOLS) libnfuzz.so libnfuzz.a
 # must be included after the default target
 -include $(BUILD_SYSTEM_DIR)/makefiles/targets.mk
 
-ifeq ($(OS), Windows_NT)
-  # libbacktrace/libunwind is disabled on Windows.
-  USE_LIBBACKTRACE := 0
-endif
-
+USE_LIBBACKTRACE := 1
 DEPOSITS_DELAY := 0
 
 #- "--define:release" cannot be added to "config.nims"
