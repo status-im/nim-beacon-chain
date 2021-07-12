@@ -36,6 +36,8 @@ else
 	CPU_LIMIT_CMD := cpulimit --limit=$(CPU_LIMIT) --foreground --
 endif
 
+ENV_SCRIPT := ./env.sh
+
 # unconditionally built by the default Make target
 # TODO re-enable ncli_query if/when it works again
 TOOLS := \
