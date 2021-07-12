@@ -1236,10 +1236,10 @@ proc stop*(node: Eth2Node) {.async.} =
   # Ignore errors in futures, since we're shutting down (but log them on the
   # TRACE level, if a timeout is reached).
   let
-    waitedFutures = @[
-      node.discovery.closeWait(),
-      node.switch.stop(),
-    ]
+    waitedFutures = if node.discoveryEnabled:
+                      @[node.discovery.closeWait(), node.switch.stop()]
+                    else:
+                      @[node.switch.stop()]
     timeout = 5.seconds
     completed = await withTimeout(allFutures(waitedFutures), timeout)
   if not completed:
