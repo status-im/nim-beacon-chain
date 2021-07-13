@@ -503,7 +503,7 @@ proc proposeBlock(node: BeaconNode,
     return head
 
   let
-    fork = getStateField(node.dag.headState.data, fork)
+    fork = node.dag.forkAtSlot(slot)
     genesis_validators_root =
       getStateField(node.dag.headState.data, genesis_validators_root)
     randao = await validator.genRandaoReveal(
@@ -598,7 +598,7 @@ proc handleAttestations(node: BeaconNode, head: BlockRef, slot: Slot) =
     epochRef = node.dag.getEpochRef(
       attestationHead.blck, slot.compute_epoch_at_slot())
     committees_per_slot = get_committee_count_per_slot(epochRef)
-    fork = getStateField(node.dag.headState.data, fork)
+    fork = node.dag.forkAtSlot(slot)
     genesis_validators_root =
       getStateField(node.dag.headState.data, genesis_validators_root)
 
@@ -799,7 +799,7 @@ proc sendAggregatedAttestations(
 
   let
     epochRef = node.dag.getEpochRef(aggregationHead, aggregationSlot.epoch)
-    fork = getStateField(node.dag.headState.data, fork)
+    fork = node.dag.forkAtSlot(aggregationSlot)
     genesis_validators_root = node.dag.genesisValidatorsRoot
     committees_per_slot = get_committee_count_per_slot(epochRef)
 
