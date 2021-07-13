@@ -7,7 +7,7 @@ import
   nimcrypto/utils as ncrutils,
   ../beacon_node_common, ../networking/eth2_network,
   ../consensus_object_pools/[blockchain_dag, exit_pool],
-  ../spec/[crypto, digest, datatypes],
+  ../spec/[crypto, digest, datatypes/phase0, datatypes/altair],
   ../ssz/merkleization,
   rest_utils
 export json_serialization
@@ -342,7 +342,20 @@ proc decodeBody*[T](t: typedesc[T],
       return err("Unexpected deserialization error")
   ok(data)
 
-RestJson.useCustomSerialization(BeaconState.justification_bits):
+RestJson.useCustomSerialization(phase0.BeaconState.justification_bits):
+  read:
+    let s = reader.readValue(string)
+    if s.len != 4:
+      raiseUnexpectedValue(reader, "A string with 4 characters expected")
+    try:
+      hexToByteArray(s, 1)[0]
+    except ValueError:
+      raiseUnexpectedValue(reader,
+                          "The `justification_bits` value must be a hex string")
+  write:
+    writer.writeValue "0x" & toHex([value])
+
+RestJson.useCustomSerialization(altair.BeaconState.justification_bits):
   read:
     let s = reader.readValue(string)
     if s.len != 4:

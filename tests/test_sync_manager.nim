@@ -4,7 +4,9 @@ import std/strutils
 import unittest2
 import chronos
 import ../beacon_chain/gossip_processing/block_processor,
-       ../beacon_chain/sync/sync_manager
+       ../beacon_chain/sync/sync_manager,
+       ../beacon_chain/spec/datatypes/phase0,
+       ../beacon_chain/spec/forkedbeaconstate_helpers
 
 type
   SomeTPeer = ref object
@@ -26,13 +28,13 @@ proc newBlockProcessor(): ref BlockProcessor =
   )
 
 suite "SyncManager test suite":
-  proc createChain(start, finish: Slot): seq[SignedBeaconBlock] =
+  proc createChain(start, finish: Slot): seq[ForkedSignedBeaconBlock] =
     doAssert(start <= finish)
     let count = int(finish - start + 1'u64)
-    result = newSeq[SignedBeaconBlock](count)
+    result = newSeq[ForkedSignedBeaconBlock](count)
     var curslot = start
     for item in result.mitems():
-      item.message.slot = curslot
+      item.phase0Block.message.slot = curslot
       curslot = curslot + 1'u64
 
   test "[SyncQueue] Start and finish slots equal":
@@ -220,7 +222,7 @@ suite "SyncManager test suite":
       proc simpleValidator(aq: AsyncQueue[BlockEntry]) {.async.} =
         while true:
           let sblock = await aq.popFirst()
-          if sblock.blck.message.slot == Slot(counter):
+          if sblock.blck.phase0Block.message.slot == Slot(counter):
             inc(counter)
             sblock.done()
           else:
@@ -269,7 +271,7 @@ suite "SyncManager test suite":
       proc simpleValidator(aq: AsyncQueue[BlockEntry]) {.async.} =
         while true:
           let sblock = await aq.popFirst()
-          if sblock.blck.message.slot == Slot(counter):
+          if sblock.blck.phase0Block.message.slot == Slot(counter):
             inc(counter)
             sblock.done()
           else:
@@ -324,7 +326,7 @@ suite "SyncManager test suite":
       proc simpleValidator(aq: AsyncQueue[BlockEntry]) {.async.} =
         while true:
           let sblock = await aq.popFirst()
-          if sblock.blck.message.slot == Slot(counter):
+          if sblock.blck.phase0Block.message.slot == Slot(counter):
             inc(counter)
             sblock.done()
           else:
@@ -395,7 +397,7 @@ suite "SyncManager test suite":
 
   test "[SyncQueue] hasEndGap() test":
     let chain1 = createChain(Slot(1), Slot(1))
-    let chain2 = newSeq[SignedBeaconBlock]()
+    let chain2 = newSeq[ForkedSignedBeaconBlock]()
 
     for counter in countdown(32'u64, 2'u64):
       let req = SyncRequest[SomeTPeer](slot: Slot(1), count: counter,
@@ -412,7 +414,7 @@ suite "SyncManager test suite":
 
   test "[SyncQueue] getLastNonEmptySlot() test":
     let chain1 = createChain(Slot(10), Slot(10))
-    let chain2 = newSeq[SignedBeaconBlock]()
+    let chain2 = newSeq[ForkedSignedBeaconBlock]()
 
     for counter in countdown(32'u64, 2'u64):
       let req = SyncRequest[SomeTPeer](slot: Slot(10), count: counter,

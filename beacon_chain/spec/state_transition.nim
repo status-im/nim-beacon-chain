@@ -177,7 +177,7 @@ proc maybeUpgradeStateToAltair*(
   # once by checking for existing fork.
   if getStateField(state, slot).epoch == cfg.ALTAIR_FORK_EPOCH and
       state.beaconStateFork == forkPhase0:
-    var newState = upgrade_to_altair(state.hbsPhase0.data)
+    var newState = upgrade_to_altair(cfg, state.hbsPhase0.data)
     state = (ref ForkedHashedBeaconState)(
       beaconStateFork: forkAltair,
       hbsAltair: altair.HashedBeaconState(
@@ -225,7 +225,7 @@ proc state_transition_block_aux(
     state: var SomeHashedBeaconState,
     signedBlock: phase0.SignedBeaconBlock | phase0.SigVerifiedSignedBeaconBlock |
                  phase0.TrustedSignedBeaconBlock | altair.SignedBeaconBlock |
-                 altair.SigVerifiedSignedBeaconBlock,
+                 altair.SigVerifiedSignedBeaconBlock | altair.TrustedSignedBeaconBlock,
     cache: var StateCache, flags: UpdateFlags): bool {.nbench.} =
   # Block updates - these happen when there's a new block being suggested
   # by the block proposer. Every actor in the network will update its state
@@ -274,7 +274,8 @@ proc state_transition_block*(
     state: var ForkedHashedBeaconState,
     signedBlock: phase0.SignedBeaconBlock | phase0.SigVerifiedSignedBeaconBlock |
                  phase0.TrustedSignedBeaconBlock |
-                 altair.SignedBeaconBlock | altair.SigVerifiedSignedBeaconBlock,
+                 altair.SignedBeaconBlock | altair.SigVerifiedSignedBeaconBlock |
+                 altair.TrustedSignedBeaconBlock,
     cache: var StateCache, flags: UpdateFlags,
     rollback: RollbackForkedHashedProc): bool {.nbench.} =
   ## `rollback` is called if the transition fails and the given state has been
@@ -303,7 +304,8 @@ proc state_transition*(
     cfg: RuntimeConfig,
     state: var ForkedHashedBeaconState,
     signedBlock: phase0.SignedBeaconBlock | phase0.SigVerifiedSignedBeaconBlock |
-                 phase0.TrustedSignedBeaconBlock | altair.SignedBeaconBlock,
+                 phase0.TrustedSignedBeaconBlock | altair.SignedBeaconBlock |
+                 altair.TrustedSignedBeaconBlock,
     cache: var StateCache, rewards: var RewardInfo, flags: UpdateFlags,
     rollback: RollbackForkedHashedProc): bool {.nbench.} =
   ## Apply a block to the state, advancing the slot counter as necessary. The
@@ -400,6 +402,7 @@ proc makeBeaconBlock*(
     proposerSlashings: seq[ProposerSlashing],
     attesterSlashings: seq[AttesterSlashing],
     voluntaryExits: seq[SignedVoluntaryExit],
+    sync_aggregate: SyncAggregate,
     executionPayload: ExecutionPayload,
     rollback: RollbackAltairHashedProc,
     cache: var StateCache): Option[altair.BeaconBlock] =
@@ -425,9 +428,8 @@ proc makeBeaconBlock*(
       attestations: List[Attestation, Limit MAX_ATTESTATIONS](attestations),
       deposits: List[Deposit, Limit MAX_DEPOSITS](deposits),
       voluntary_exits:
-        List[SignedVoluntaryExit, Limit MAX_VOLUNTARY_EXITS](voluntaryExits)))
-
-  # TODO sync committees
+        List[SignedVoluntaryExit, Limit MAX_VOLUNTARY_EXITS](voluntaryExits),
+      sync_aggregate: sync_aggregate))
 
   let res = process_block(cfg, state.data, blck, {skipBlsValidation}, cache)
 

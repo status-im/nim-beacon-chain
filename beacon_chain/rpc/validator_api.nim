@@ -18,7 +18,7 @@ import
 
   # Local modules
   ../spec/[crypto, digest, forkedbeaconstate_helpers, helpers, network, signatures],
-  ../spec/datatypes/base,
+  ../spec/datatypes/phase0,
   ../spec/eth2_apis/callsigs_types,
   ../consensus_object_pools/[blockchain_dag, spec_cache, attestation_pool], ../ssz/merkleization,
   ../beacon_node_common, ../beacon_node_types,
@@ -35,7 +35,7 @@ type
 proc installValidatorApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
     raises: [Exception].} = # TODO fix json-rpc
   rpcServer.rpc("get_v1_validator_block") do (
-      slot: Slot, graffiti: GraffitiBytes, randao_reveal: ValidatorSig) -> BeaconBlock:
+      slot: Slot, graffiti: GraffitiBytes, randao_reveal: ValidatorSig) -> phase0.BeaconBlock:
     debug "get_v1_validator_block", slot = slot
     let head = node.doChecksAndGetCurrentHead(slot)
     let proposer = node.dag.getProposer(head, slot)
@@ -45,9 +45,9 @@ proc installValidatorApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
       node, randao_reveal, proposer.get(), graffiti, head, slot)
     if message.isNone():
       raise newException(CatchableError, "could not retrieve block for slot: " & $slot)
-    return message.get()
+    return message.get().phase0Block.message
 
-  rpcServer.rpc("post_v1_validator_block") do (body: SignedBeaconBlock) -> bool:
+  rpcServer.rpc("post_v1_validator_block") do (body: phase0.SignedBeaconBlock) -> bool:
     debug "post_v1_validator_block",
       slot = body.message.slot,
       prop_idx = body.message.proposer_index
@@ -56,7 +56,9 @@ proc installValidatorApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
     if head.slot >= body.message.slot:
       raise newException(CatchableError,
         "Proposal is for a past slot: " & $body.message.slot)
-    if head == await proposeSignedBlock(node, head, AttachedValidator(), body):
+    if head == await proposeSignedBlock(
+        node, head, AttachedValidator(),
+        ForkedSignedBeaconBlock.init(body)):
       raise newException(CatchableError, "Could not propose block")
     return true
 
@@ -79,7 +81,8 @@ proc installValidatorApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
   rpcServer.rpc("post_v1_validator_aggregate_and_proofs") do (
       payload: SignedAggregateAndProof) -> bool:
     debug "post_v1_validator_aggregate_and_proofs"
-    node.network.broadcast(node.topicAggregateAndProofs, payload)
+    node.network.broadcast(
+      getAggregateAndProofsTopic(node.dag.forkDigests.phase0), payload)
     notice "Aggregated attestation sent",
       attestation = shortLog(payload.message.aggregate)
 

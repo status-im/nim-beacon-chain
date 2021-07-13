@@ -230,7 +230,17 @@ p2pProtocol BeaconSync(version = 1,
         trace "wrote response block",
           slot = blocks[i].slot, roor = shortLog(blocks[i].root)
         let blk = dag.get(blocks[i]).data
-        await response.write(blk.asSigned)
+        case blk.kind
+        of BeaconBlockFork.Phase0:
+          await response.write(blk.phase0Block.asSigned)
+        of BeaconBlockFork.Altair:
+          # Skipping all subsequent blocks should be OK because the spec says:
+          # "Clients MAY limit the number of blocks in the response."
+          # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/phase0/p2p-interface.md#beaconblocksbyrange
+          #
+          # Also, our response would be indistinguishable from a node
+          # that have been synced exactly to the altair transition slot.
+          break
 
       debug "Block range request done",
         peer, startSlot, count, reqStep, found = count - startIndex
@@ -259,8 +269,18 @@ p2pProtocol BeaconSync(version = 1,
       let blockRef = dag.getRef(blockRoots[i])
       if not isNil(blockRef):
         let blk = dag.get(blockRef).data
-        await response.write(blk.asSigned)
-        inc found
+        case blk.kind
+        of BeaconBlockFork.Phase0:
+          await response.write(blk.phase0Block.asSigned)
+          inc found
+        of BeaconBlockFork.Altair:
+          # Skipping this block should be fine because the spec says:
+          # "Clients MAY limit the number of blocks in the response."
+          # https://github.com/ethereum/eth2.0-specs/blob/dev/specs/phase0/p2p-interface.md#beaconblocksbyroot
+          #
+          # Also, our response would be indistinguishable from a node
+          # that have been synced exactly to the altair transition slot.
+          continue
 
     peer.updateRequestQuota(found.float * blockResponseCost)
 
@@ -340,6 +360,16 @@ p2pProtocol BeaconSync(version = 1,
                reason: uint64)
     {.async, libp2pProtocol("goodbye", 1).} =
     debug "Received Goodbye message", reason = disconnectReasonName(reason), peer
+
+proc useSyncV2*(state: BeaconSyncNetworkState): bool =
+  let
+    wallTime = state.getTime()
+    wallTimeSlot = state.dag.beaconClock.toBeaconTime(wallTime).slotOrZero
+
+  wallTimeSlot.epoch >= state.dag.cfg.ALTAIR_FORK_EPOCH
+
+proc useSyncV2*(peer: Peer): bool =
+  peer.networkState(BeaconSync).useSyncV2()
 
 proc setStatusMsg(peer: Peer, statusMsg: StatusMsg) =
   debug "Peer status", peer, statusMsg

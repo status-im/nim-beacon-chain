@@ -311,3 +311,8 @@ iterator oneIndices*(a: BitArray): int =
   for i in 0..<a.len:
     if a[i]: yield i
 
+func countOnes*(a: BitArray): int =
+  # TODO: This can be optimised to work on words
+  for bit in a:
+    if bit: inc result
+

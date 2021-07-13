@@ -125,7 +125,7 @@ func validatorKey*(
   ## at any point in time - this function may return pubkeys for indicies that
   ## are not (yet) part of the head state (if the key has been observed on a
   ## non-head branch)!
-  dag.db.immutableValidators.load(index)
+  dag.db.immutableValidators.byIndex.load(index)
 
 func validatorKey*(
     epochRef: EpochRef, index: ValidatorIndex or uint64): Option[CookedPubKey] =
@@ -149,7 +149,22 @@ func init*(
         getStateField(state.data, current_justified_checkpoint),
       finalized_checkpoint: getStateField(state.data, finalized_checkpoint),
       shuffled_active_validator_indices:
-        cache.get_shuffled_active_validator_indices(state.data, epoch))
+        cache.get_shuffled_active_validator_indices(state.data, epoch),
+      sync_committee:
+        case state.data.beaconStateFork
+        of forkAltair:
+          mapIt(
+            state.data.hbsAltair.data.current_sync_committee.pubkeys,
+            block:
+              try:
+                dag.db.immutableValidators.validatorIdx(it)
+              except KeyError:
+                raiseAssert "the validator keys are valid"
+          )
+        of forkPhase0:
+          @[]
+      )
+
   for i in 0'u64..<SLOTS_PER_EPOCH:
     epochRef.beacon_proposers[i] = get_beacon_proposer_index(
       state.data, cache, epoch.compute_start_slot_at_epoch() + i)
@@ -424,7 +439,7 @@ proc init*(T: type ChainDAGRef,
     updateFlags: {verifyFinalization} * updateFlags,
     cfg: cfg,
   )
-
+  doAssert cfg.GENESIS_FORK_VERSION != cfg.ALTAIR_FORK_VERSION
   doAssert dag.updateFlags in [{}, {verifyFinalization}]
 
   var cache: StateCache
@@ -452,6 +467,9 @@ proc init*(T: type ChainDAGRef,
     totalBlocks = blocks.len
 
   dag
+
+template genesisValidatorsRoot*(dag: ChainDAGRef): Eth2Digest =
+  getStateField(dag.headState.data, genesis_validators_root)
 
 func getEpochRef*(
     dag: ChainDAGRef, state: StateData, cache: var StateCache): EpochRef =
@@ -542,6 +560,12 @@ func stateCheckpoint*(bs: BlockSlot): BlockSlot =
   while not isStateCheckPoint(bs):
     bs = bs.parentOrSlot
   bs
+
+proc forkAtSlot*(dag: ChainDAGRef, slot: Slot): Fork =
+  if slot.epoch < dag.cfg.ALTAIR_FORK_EPOCH:
+    genesisFork(dag.cfg)
+  else:
+    altairFork(dag.cfg)
 
 proc forkDigestAtSlot*(dag: ChainDAGRef, slot: Slot): ForkDigest =
   if slot.epoch < dag.cfg.ALTAIR_FORK_EPOCH:
@@ -657,15 +681,6 @@ func getBlockBySlot*(dag: ChainDAGRef, slot: Slot): BlockRef =
   ## with slot number less or equal to `slot`.
   dag.head.atSlot(slot).blck
 
-proc get*(dag: ChainDAGRef, blck: BlockRef): BlockData =
-  ## Retrieve the associated block body of a block reference
-  doAssert (not blck.isNil), "Trying to get nil BlockRef"
-
-  let data = dag.db.getBlock(blck.root)
-  doAssert data.isSome, "BlockRef without backing data, database corrupt?"
-
-  BlockData(data: data.get(), refs: blck)
-
 proc getForkedBlock*(dag: ChainDAGRef, blck: BlockRef): ForkedTrustedSignedBeaconBlock =
   # TODO implement this properly
   let phase0Block = dag.db.getBlock(blck.root)
@@ -679,6 +694,12 @@ proc getForkedBlock*(dag: ChainDAGRef, blck: BlockRef): ForkedTrustedSignedBeaco
                                           altairBlock: altairBlock.get)
 
   raiseAssert "BlockRef without backing data, database corrupt?"
+
+proc get*(dag: ChainDAGRef, blck: BlockRef): BlockData =
+  ## Retrieve the associated block body of a block reference
+  doAssert (not blck.isNil), "Trying to get nil BlockRef"
+
+  BlockData(data: dag.getForkedBlock(blck), refs: blck)
 
 proc get*(dag: ChainDAGRef, root: Eth2Digest): Option[BlockData] =
   ## Retrieve a resolved block reference and its associated body, if available
@@ -723,9 +744,17 @@ proc applyBlock(
 
   loadStateCache(dag, cache, state.blck, getStateField(state.data, slot).epoch)
 
-  let ok = state_transition(
-    dag.cfg, state.data, blck.data,
-    cache, rewards, flags + dag.updateFlags + {slotProcessed}, restore)
+  # TODO some abstractions
+  let ok =
+    case blck.data.kind:
+    of BeaconBlockFork.Phase0:
+      state_transition(
+        dag.cfg, state.data, blck.data.phase0Block,
+        cache, rewards, flags + dag.updateFlags + {slotProcessed}, restore)
+    of BeaconBlockFork.Altair:
+      state_transition(
+        dag.cfg, state.data, blck.data.altairBlock,
+        cache, rewards, flags + dag.updateFlags + {slotProcessed}, restore)
   if ok:
     state.blck = blck.refs
 
@@ -949,6 +978,51 @@ proc pruneBlocksDAG(dag: ChainDAGRef) =
     currentCandidateHeads = dag.heads.len,
     prunedHeads = hlen - dag.heads.len,
     dagPruneDur = Moment.now() - startTick
+
+proc syncSubcommittee*(syncCommittee: openarray[ValidatorIndex],
+                       subnetId: SubnetId): seq[ValidatorIndex] =
+  ## TODO Return a view type
+  ## Unfortunately, this doesn't work as a template right now.
+  if syncCommittee.len == 0:
+    return @[]
+
+  let
+    startIdx = subnetId.int * SYNC_COMMITTEE_SIZE
+    onePastEndIdx = min(startIdx + SYNC_COMMITTEE_SIZE, syncCommittee.len)
+  doAssert startIdx < syncCommittee.len
+  @(toOpenArray(syncCommittee, startIdx, onePastEndIdx - 1))
+
+proc getSubcommitteePosition*(dag: ChainDAGRef,
+                              blockRef: BlockRef,
+                              committeeIdx: SubnetId,
+                              validatorIdx: ValidatorIndex): Option[uint64] =
+  let epochRef = dag.getEpochRef(blockRef, blockRef.slot.epoch)
+  for pos, valIdx in epochRef.sync_committee.syncSubcommittee(committeeIdx):
+    if valIdx == validatorIdx:
+      return some uint64(pos)
+
+template syncCommitteeParticipants*(dag: ChainDAGRef,
+                                    blockRef: BlockRef): openarray[ValidatorIndex] =
+  dag.getEpochRef(blockRef, blockRef.slot.epoch).sync_committee
+
+template syncCommitteeParticipants*(
+    dag: ChainDAGRef,
+    blockRef: BlockRef,
+    committeeIdx: SubnetId): seq[ValidatorIndex] =
+  let
+    startIdx = committeeIdx.int * SYNC_SUBCOMMITTEE_SIZE
+    onePastEndIdx = startIdx + SYNC_SUBCOMMITTEE_SIZE
+  # TODO Nim is not happy with returning an openarray here
+  @(toOpenArray(dag.syncCommitteeParticipants(blockRef), startIdx, onePastEndIdx - 1))
+
+iterator syncCommitteeParticipants*(
+    dag: ChainDAGRef,
+    blockRef: BlockRef,
+    committeeIdx: SubnetId,
+    aggregationBits: SyncCommitteeAggregationBits): ValidatorIndex =
+  for pos, valIdx in pairs(dag.syncCommitteeParticipants(blockRef, committeeIdx)):
+    if aggregationBits[pos]:
+      yield valIdx
 
 func needStateCachesAndForkChoicePruning*(dag: ChainDAGRef): bool =
   dag.lastPrunePoint != dag.finalizedHead

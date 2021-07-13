@@ -192,6 +192,9 @@ type
     eth1_deposit_index*: uint64
     beacon_proposers*: array[SLOTS_PER_EPOCH, Option[ValidatorIndex]]
     shuffled_active_validator_indices*: seq[ValidatorIndex]
+    # TODO this updates at a lower cadence
+    #      (once per EPOCHS_PER_SYNC_COMMITTEE_PERIOD epochs)
+    sync_committee*: seq[ValidatorIndex]
 
     # balances, as used in fork choice
     effective_balances_bytes*: seq[byte]
@@ -212,7 +215,7 @@ type
   BlockData* = object
     ## Body and graph in one
 
-    data*: phase0.TrustedSignedBeaconBlock # We trust all blocks we have a ref for
+    data*: ForkedTrustedSignedBeaconBlock # We trust all blocks we have a ref for
     refs*: BlockRef
 
   StateData* = object

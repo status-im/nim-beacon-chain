@@ -282,7 +282,11 @@ proc addRawBlockKnownParent(
     # TODO: remove skipBLSValidation
     var sigs: seq[SignatureSet]
     if sigs.collectSignatureSets(
-        signedBlock, dag.db.immutableValidators, dag.clearanceState.data, cache).isErr():
+        signedBlock, dag.db.immutableValidators.byIndex,
+        dag.clearanceState.data,
+        dag.forkAtSlot(signedBlock.message.slot),
+        getStateField(dag.clearanceState.data, genesis_validators_root),
+        cache).isErr():
       # A PublicKey or Signature isn't on the BLS12-381 curve
       return err((ValidationResult.Reject, Invalid))
     if not quarantine.batchVerify(sigs):

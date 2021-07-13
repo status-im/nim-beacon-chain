@@ -8,7 +8,7 @@
 {.push raises: [Defect].}
 
 import
-  std/[deques, intsets, streams, tables],
+  std/[deques, intsets, streams, tables, hashes],
   stew/endians2,
   ./spec/[digest, crypto],
   ./spec/datatypes/base,
@@ -16,7 +16,11 @@ import
   ./fork_choice/fork_choice_types,
   ./validators/slashing_protection
 
-export tables, block_pools_types
+export tables, hashes, block_pools_types
+
+from ./spec/datatypes/altair import
+  SyncCommitteeAggregationBits,
+  SYNC_COMMITTEE_SUBNET_COUNT
 
 const
   ATTESTATION_LOOKBACK* =
@@ -75,6 +79,32 @@ type
 
     nextAttestationEpoch*: seq[tuple[subnet: Epoch, aggregate: Epoch]] ## \
     ## sequence based on validator indices
+
+  SyncCommitteeMsgKey* = object
+    originator*: ValidatorIndex
+    slot*: Slot
+    committeeIdx*: uint64
+
+  TrustedSyncCommitteeMsg* = object
+    subnetId*: SubnetId
+    positionInSubnet*: uint64
+    signature*: CookedSig
+
+  BestSyncSubcommitteeContribution* = object
+    totalParticipants*: int
+    participationBits*: SyncCommitteeAggregationBits
+    signature*: CookedSig
+
+  BestSyncSubcommitteeContributions* = array[SYNC_COMMITTEE_SUBNET_COUNT,
+                                             BestSyncSubcommitteeContribution]
+
+  SyncCommitteeMsgPool* = object
+    seenByAuthor*: HashSet[SyncCommitteeMsgKey]
+    seenAggregateByAuthor*: HashSet[SyncCommitteeMsgKey]
+    blockVotes*: Table[Eth2Digest, seq[TrustedSyncCommitteeMsg]]
+    bestAggregates*: Table[Eth2Digest, BestSyncSubcommitteeContributions]
+
+  SyncCommitteeMsgPoolRef* = ref SyncCommitteeMsgPool
 
   ExitPool* = object
     ## The exit pool tracks attester slashings, proposer slashings, and
@@ -155,3 +185,10 @@ type
     lastCalculatedEpoch*: Epoch
 
 func shortLog*(v: AttachedValidator): string = shortLog(v.pubKey)
+
+func hash*(x: SyncCommitteeMsgKey): Hash =
+  result = result !& hash(x.originator.uint64)
+  result = result !& hash(x.slot.uint64)
+  result = result !& hash(x.committeeIdx)
+  result = !$result
+

@@ -8,7 +8,7 @@
 {.push raises: [Defect].}
 
 import
-  std/[typetraits, tables],
+  std/[typetraits, tables, hashes],
   stew/[arrayops, assign2, byteutils, endians2, io2, objects, results],
   serialization, chronicles, snappy,
   eth/db/[kvstore, kvstore_sqlite3],
@@ -33,6 +33,12 @@ type
   DepositContractSnapshot* = object
     eth1Block*: Eth2Digest
     depositContractState*: DepositContractState
+
+  RawPubKey = array[RawPubKeySize, byte]
+
+  ImmutableValidatorsMemoryStore* = object
+    byIndex*: seq[ImmutableValidatorData2]
+    byPubKey: Table[RawPubKey, int]
 
   BeaconChainDBV0* = ref object
     ## BeaconChainDBV0 based on old kvstore table that sets the WITHOUT ROWID
@@ -84,7 +90,7 @@ type
     # immutableValidatorsDb only stores the total count; it's a proxy for SQL
     # queries.
     immutableValidatorsDb*: DbSeq[ImmutableValidatorData2]
-    immutableValidators*: seq[ImmutableValidatorData2]
+    immutableValidators*: ImmutableValidatorsMemoryStore
 
     checkpoint*: proc() {.gcsafe, raises: [Defect].}
 
@@ -153,6 +159,37 @@ const
 
 # Subkeys essentially create "tables" within the key-value store by prefixing
 # each entry with a table id
+
+proc add*(store: var ImmutableValidatorsMemoryStore, data: ImmutableValidatorData2) =
+  store.byIndex.add data
+  store.byPubKey[data.pubkey.loadValid.toPubKey.blob] = store.byIndex.len - 1
+
+template `[]`*(store: ImmutableValidatorsMemoryStore, idx: int): ImmutableValidatorData2 =
+  store.byIndex[idx]
+
+# TODO Add read-only lent overloads
+proc `[]`*(store: var ImmutableValidatorsMemoryStore,
+           key: ValidatorPubKey): var ImmutableValidatorData2
+          {.raises: [KeyError, Defect].} =
+  store.byIndex[store.byPubKey[key.blob]]
+
+proc `[]`*(store: var ImmutableValidatorsMemoryStore,
+           key: CookedPubKey): var ImmutableValidatorData2
+          {.raises: [KeyError, Defect].} =
+  store.byIndex[store.byPubKey[key.toPubkey.blob]]
+
+proc validatorIdx*(store: ImmutableValidatorsMemoryStore,
+                   key: ValidatorPubKey): ValidatorIndex
+                  {.raises: [KeyError, Defect].} =
+  ValidatorIndex store.byPubKey[key.blob]
+
+proc validatorIdx*(store: ImmutableValidatorsMemoryStore,
+                   key: CookedPubKey): ValidatorIndex
+                  {.raises: [KeyError, Defect].} =
+  ValidatorIndex store.byPubKey[key.toPubkey.blob]
+
+template len*(store: ImmutableValidatorsMemoryStore): int =
+  store.byIndex.len
 
 func subkey(kind: DbKeyKind): array[1, byte] =
   result[0] = byte ord(kind)
@@ -259,7 +296,7 @@ proc loadImmutableValidators(vals: DbSeq[ImmutableValidatorData]): seq[Immutable
   for i in 0 ..< vals.len:
     result.add vals.get(i)
 
-proc loadImmutableValidators(vals: DbSeq[ImmutableValidatorData2]): seq[ImmutableValidatorData2] =
+proc loadImmutableValidators(vals: DbSeq[ImmutableValidatorData2]): ImmutableValidatorsMemoryStore =
   for i in 0 ..< vals.len:
     result.add vals.get(i)
 
@@ -721,8 +758,9 @@ proc getState*(
   # TODO RVO is inefficient for large objects:
   #      https://github.com/nim-lang/Nim/issues/13879
   if not getStateOnlyMutableValidators(
-      db.immutableValidators, db.statesNoVal, key.data, output, rollback):
-    db.v0.getState(db.immutableValidators, key, output, rollback)
+      # TODO Should we pass the store instead?
+      db.immutableValidators.byIndex, db.statesNoVal, key.data, output, rollback):
+    db.v0.getState(db.immutableValidators.byIndex, key, output, rollback)
   else:
     true
 
@@ -740,7 +778,8 @@ proc getAltairState*(
   # TODO RVO is inefficient for large objects:
   #      https://github.com/nim-lang/Nim/issues/13879
   getAltairStateOnlyMutableValidators(
-    db.immutableValidators, db.altairStatesNoVal, key.data, output, rollback)
+    # TODO Should we pass the store instead?
+    db.immutableValidators.byIndex, db.altairStatesNoVal, key.data, output, rollback)
 
 proc getStateRoot(db: BeaconChainDBV0,
                    root: Eth2Digest,

@@ -11,8 +11,8 @@ import
   std/tables,
   stew/results,
   chronicles, chronos, metrics,
-  ../spec/[crypto, digest],
-  ../spec/datatypes/base,
+  ../spec/[crypto, digest, forkedbeaconstate_helpers],
+  ../spec/datatypes/[altair, phase0],
   ../consensus_object_pools/[block_clearance, blockchain_dag, exit_pool, attestation_pool],
   ./gossip_validation, ./block_processor,
   ./batch_validation,
@@ -66,6 +66,7 @@ type
     dag*: ChainDAGRef
     attestationPool*: ref AttestationPool
     validatorPool: ref ValidatorPool
+    syncCommitteeMsgPool: SyncCommitteeMsgPoolRef
 
     doppelgangerDetection*: DoppelgangerProtection
 
@@ -98,6 +99,7 @@ proc new*(T: type Eth2Processor,
           attestationPool: ref AttestationPool,
           exitPool: ref ExitPool,
           validatorPool: ref ValidatorPool,
+          syncCommitteeMsgPool: SyncCommitteeMsgPoolRef,
           quarantine: QuarantineRef,
           rng: ref BrHmacDrbgContext,
           getTime: GetTimeFn): ref Eth2Processor =
@@ -110,6 +112,7 @@ proc new*(T: type Eth2Processor,
     attestationPool: attestationPool,
     exitPool: exitPool,
     validatorPool: validatorPool,
+    syncCommitteeMsgPool: syncCommitteeMsgPool,
     quarantine: quarantine,
     getTime: getTime,
     batchCrypto: BatchCrypto.new(
@@ -127,7 +130,7 @@ proc getCurrentBeaconTime*(self: Eth2Processor|ref Eth2Processor): BeaconTime =
 
 proc blockValidator*(
     self: var Eth2Processor,
-    signedBlock: SignedBeaconBlock): ValidationResult =
+    signedBlock: phase0.SignedBeaconBlock | altair.SignedBeaconBlock): ValidationResult =
   logScope:
     signedBlock = shortLog(signedBlock.message)
     blockRoot = shortLog(signedBlock.root)
@@ -157,7 +160,9 @@ proc blockValidator*(
   let blck = self.dag.isValidBeaconBlock(
     self.quarantine, signedBlock, wallTime, {})
 
-  self.blockProcessor[].dumpBlock(signedBlock, blck)
+  when signedBlock is phase0.SignedBeaconBlock:
+    # TODO altair
+    self.blockProcessor[].dumpBlock(signedBlock, blck)
 
   if not blck.isOk:
     return blck.error[0]
@@ -172,7 +177,8 @@ proc blockValidator*(
   # propagation of seemingly good blocks
   trace "Block validated"
   self.blockProcessor[].addBlock(
-    signedBlock, validationDur = self.getCurrentBeaconTime() - wallTime)
+    ForkedSignedBeaconBlock.init(signedBlock),
+    validationDur = self.getCurrentBeaconTime() - wallTime)
 
   ValidationResult.Accept
 
@@ -344,3 +350,46 @@ proc voluntaryExitValidator*(
   beacon_voluntary_exits_received.inc()
 
   ValidationResult.Accept
+
+proc syncCommitteeMsgValidator*(
+    self: ref Eth2Processor,
+    syncCommitteeMsg: SyncCommitteeMessage,
+    subnet_id: SubnetId,
+    checkSignature: bool = true): ValidationResult =
+  let wallTime = self.getCurrentBeaconTime()
+
+  # Potential under/overflows are fine; would just create odd metrics and logs
+  let delay = wallTime - syncCommitteeMsg.slot.toBeaconTime
+  debug "Sync committee message received", delay
+
+  # Now proceed to validation
+  let v = validateSyncCommitteeMessage(self.dag, self.syncCommitteeMsgPool,
+                                       syncCommitteeMsg, subnet_id, wallTime,
+                                       checkSignature)
+  if v.isErr():
+    debug "Dropping sync committee message", validationError = v.error
+    return v.error[0]
+
+  ValidationResult.Accept
+
+proc syncCommitteeContributionValidator*(
+    self: ref Eth2Processor,
+    contributionAndProof: SignedContributionAndProof,
+    checkSignature: bool = true): ValidationResult =
+  let wallTime = self.getCurrentBeaconTime()
+
+  # Potential under/overflows are fine; would just create odd metrics and logs
+  let delay = wallTime - contributionAndProof.message.contribution.slot.toBeaconTime
+  debug "Sync committee contribution received", delay
+
+  # Now proceed to validation
+  let v = validateSignedContributionAndProof(self.dag, self.syncCommitteeMsgPool,
+                                             contributionAndProof, wallTime,
+                                             checkSignature)
+  if v.isErr():
+    debug "Dropping sync committee contribution and proof",
+           validationError = v.error
+    return v.error[0]
+
+  ValidationResult.Accept
+

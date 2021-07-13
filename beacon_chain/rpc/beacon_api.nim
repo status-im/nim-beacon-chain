@@ -18,7 +18,7 @@ import
   ../validators/validator_duties,
   ../gossip_processing/gossip_validation,
   ../consensus_object_pools/blockchain_dag,
-  ../spec/[crypto, datatypes, digest, forkedbeaconstate_helpers, network],
+  ../spec/[crypto, datatypes/phase0, digest, forkedbeaconstate_helpers, network],
   ../spec/eth2_apis/callsigs_types,
   ../ssz/merkleization,
   ./rpc_utils, ./eth2_json_rpc_serialization
@@ -385,7 +385,8 @@ proc installBeaconApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
       blockId: string) ->
       tuple[canonical: bool, header: SignedBeaconBlockHeader]:
     let bd = node.getBlockDataFromBlockId(blockId)
-    let tsbb = bd.data
+    # TODO check for Altair blocks and fail, because /v1/
+    let tsbb = bd.data.phase0Block
     static: doAssert tsbb.signature is TrustedSig and
               sizeof(ValidatorSig) == sizeof(tsbb.signature)
     result.header.signature = cast[ValidatorSig](tsbb.signature)
@@ -398,22 +399,25 @@ proc installBeaconApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
 
     result.canonical = bd.refs.isAncestorOf(node.dag.head)
 
-  rpcServer.rpc("post_v1_beacon_blocks") do (blck: SignedBeaconBlock) -> int:
+  rpcServer.rpc("post_v1_beacon_blocks") do (blck: phase0.SignedBeaconBlock) -> int:
     if not(node.syncManager.inProgress):
       raise newException(CatchableError,
                          "Beacon node is currently syncing, try again later.")
     let head = node.dag.head
     if head.slot >= blck.message.slot:
-      # TODO altair-transition
+      # TODO altair-transition, but not immediate testnet-priority to detect
+      # Altair and fail, since /v1/ doesn't support Altair
       let blocksTopic = getBeaconBlocksTopic(node.dag.forkDigests.phase0)
       node.network.broadcast(blocksTopic, blck)
       # The block failed validation, but was successfully broadcast anyway.
       # It was not integrated into the beacon node's database.
       return 202
     else:
-      let res = await proposeSignedBlock(node, head, AttachedValidator(), blck)
+      let res = await proposeSignedBlock(
+        node, head, AttachedValidator(),
+        ForkedSignedBeaconBlock.init(blck))
       if res == head:
-        # TODO altair-transition
+        # TODO altair-transition, but not immediate testnet-priority
         let blocksTopic = getBeaconBlocksTopic(node.dag.forkDigests.phase0)
         node.network.broadcast(blocksTopic, blck)
         # The block failed validation, but was successfully broadcast anyway.
@@ -425,16 +429,19 @@ proc installBeaconApiHandlers*(rpcServer: RpcServer, node: BeaconNode) {.
         return 200
 
   rpcServer.rpc("get_v1_beacon_blocks_blockId") do (
-      blockId: string) -> TrustedSignedBeaconBlock:
-    return node.getBlockDataFromBlockId(blockId).data
+      blockId: string) -> phase0.TrustedSignedBeaconBlock:
+    # TODO detect Altair and fail: /v1/ APIs don't support Altair
+    return node.getBlockDataFromBlockId(blockId).data.phase0Block
 
   rpcServer.rpc("get_v1_beacon_blocks_blockId_root") do (
       blockId: string) -> Eth2Digest:
-    return node.getBlockDataFromBlockId(blockId).data.message.state_root
+    # TODO detect Altair and fail: /v1/ APIs don't support Altair
+    return node.getBlockDataFromBlockId(blockId).data.phase0Block.message.state_root
 
   rpcServer.rpc("get_v1_beacon_blocks_blockId_attestations") do (
       blockId: string) -> seq[TrustedAttestation]:
-    return node.getBlockDataFromBlockId(blockId).data.message.body.attestations.asSeq
+    # TODO detect Altair and fail: /v1/ APIs don't support Altair
+    return node.getBlockDataFromBlockId(blockId).data.phase0Block.message.body.attestations.asSeq
 
   rpcServer.rpc("get_v1_beacon_pool_attestations") do (
       slot: Option[uint64], committee_index: Option[uint64]) ->

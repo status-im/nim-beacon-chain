@@ -102,7 +102,8 @@ proc addIndexedAttestation(
       sigs: var seq[SignatureSet],
       attestation: IndexedAttestation,
       validatorKeys: auto,
-      state: ForkedHashedBeaconState,
+      fork: Fork,
+      genesis_validators_root: Eth2Digest
      ): Result[void, cstring] =
   ## Add an indexed attestation for batched BLS verification
   ## purposes
@@ -117,8 +118,8 @@ proc addIndexedAttestation(
           attestation.data,
           attestation.signature.loadOrExit(
             "addIndexedAttestation: cannot load signature"),
-          getStateField(state, fork),
-          getStateField(state, genesis_validators_root),
+          fork,
+          genesis_validators_root,
           attestation.data.target.epoch,
           DOMAIN_BEACON_ATTESTER)
   ok()
@@ -128,6 +129,8 @@ proc addAttestation(
       attestation: Attestation,
       validatorKeys: auto,
       state: ForkedHashedBeaconState,
+      fork: Fork,
+      genesis_validators_root: Eth2Digest,
       cache: var StateCache
      ): Result[void, cstring] =
 
@@ -155,8 +158,8 @@ proc addAttestation(
           attestation.data,
           attestation.signature.loadOrExit(
             "addAttestation: cannot load signature"),
-          getStateField(state, fork),
-          getStateField(state, genesis_validators_root),
+          fork,
+          genesis_validators_root,
           attestation.data.target.epoch,
           DOMAIN_BEACON_ATTESTER)
 
@@ -256,6 +259,8 @@ proc collectSignatureSets*(
        signed_block: phase0.SignedBeaconBlock | altair.SignedBeaconBlock,
        validatorKeys: auto,
        state: ForkedHashedBeaconState,
+       fork: Fork,
+       genesis_validators_root: Eth2Digest,
        cache: var StateCache): Result[void, cstring] =
   ## Collect all signatures in a single signed block.
   ## This includes
@@ -268,6 +273,9 @@ proc collectSignatureSets*(
   ##
   ## We do not include deposits as they can be invalid per protocol
   ## (secp256k1 signature instead of BLS)
+
+  # TODO state is only used for get_attesting_indices() in addAttestation;
+  # remove it and remove any notion of BeaconStates from this module
 
   # Metadata
   # ----------------------------------------------------
@@ -288,8 +296,8 @@ proc collectSignatureSets*(
           signed_block.message,
           signed_block.signature.loadOrExit(
             "collectSignatureSets: cannot load signature"),
-          getStateField(state, fork),
-          getStateField(state, genesis_validators_root),
+          fork,
+          genesis_validators_root,
           epoch,
           DOMAIN_BEACON_PROPOSER)
 
@@ -300,8 +308,8 @@ proc collectSignatureSets*(
           epoch,
           signed_block.message.body.randao_reveal.loadOrExit(
             "collectSignatureSets: cannot load randao"),
-          getStateField(state, fork),
-          getStateField(state, genesis_validators_root),
+          fork,
+          genesis_validators_root,
           epoch,
           DOMAIN_RANDAO)
 
@@ -333,8 +341,8 @@ proc collectSignatureSets*(
               header_1.message,
               header_1.signature.loadOrExit(
                 "collectSignatureSets: cannot load proposer slashing 1 signature"),
-              getStateField(state, fork),
-              getStateField(state, genesis_validators_root),
+              fork,
+              genesis_validators_root,
               epoch1,
               DOMAIN_BEACON_PROPOSER
             )
@@ -352,8 +360,8 @@ proc collectSignatureSets*(
               header_2.message,
               header_2.signature.loadOrExit(
                 "collectSignatureSets: cannot load proposer slashing 2 signature"),
-              getStateField(state, fork),
-              getStateField(state, genesis_validators_root),
+              fork,
+              genesis_validators_root,
               epoch2,
               DOMAIN_BEACON_PROPOSER
             )
@@ -373,10 +381,12 @@ proc collectSignatureSets*(
     template slashing: untyped = signed_block.message.body.attester_slashings[i]
 
     # Attestation 1
-    ? sigs.addIndexedAttestation(slashing.attestation_1, validatorKeys, state)
+    ? sigs.addIndexedAttestation(
+      slashing.attestation_1, validatorKeys, fork, genesis_validators_root)
 
     # Conflicting attestation 2
-    ? sigs.addIndexedAttestation(slashing.attestation_2, validatorKeys, state)
+    ? sigs.addIndexedAttestation(
+      slashing.attestation_2, validatorKeys, fork, genesis_validators_root)
 
   # 5. Attestations
   # ----------------------------------------------------
@@ -390,7 +400,7 @@ proc collectSignatureSets*(
     # fixed in 1.4.2
     ? sigs.addAttestation(
         signed_block.message.body.attestations[i],
-        validatorKeys, state, cache)
+        validatorKeys, state, fork, genesis_validators_root, cache)
 
   # 6. VoluntaryExits
   # ----------------------------------------------------
@@ -412,8 +422,8 @@ proc collectSignatureSets*(
             volex.message,
             volex.signature.loadOrExit(
               "collectSignatureSets: cannot load voluntary exit signature"),
-            getStateField(state, fork),
-            getStateField(state, genesis_validators_root),
+            fork,
+            genesis_validators_root,
             volex.message.epoch,
             DOMAIN_VOLUNTARY_EXIT)
 

@@ -11,7 +11,8 @@ import
   std/math,
   stew/results,
   chronicles, chronos, metrics,
-  ../spec/[crypto, datatypes/phase0, digest],
+  ../spec/datatypes/[phase0, altair],
+  ../spec/[crypto, digest, forkedbeaconstate_helpers],
   ../consensus_object_pools/[block_clearance, blockchain_dag, attestation_pool],
   ./consensus_manager,
   ".."/[beacon_clock, beacon_node_types],
@@ -26,7 +27,7 @@ declareHistogram beacon_store_block_duration_seconds,
 
 type
   BlockEntry* = object
-    blck*: phase0.SignedBeaconBlock
+    blck*: ForkedSignedBeaconBlock
     resfut*: Future[Result[void, BlockError]]
     queueTick*: Moment # Moment when block was enqueued
     validationDur*: Duration # Time it took to perform gossip validation
@@ -103,7 +104,7 @@ proc hasBlocks*(self: BlockProcessor): bool =
 # ------------------------------------------------------------------------------
 
 proc addBlock*(
-    self: var BlockProcessor, blck: phase0.SignedBeaconBlock,
+    self: var BlockProcessor, blck: ForkedSignedBeaconBlock,
     resfut: Future[Result[void, BlockError]] = nil,
     validationDur = Duration()) =
   ## Enqueue a Gossip-validated block for consensus verification
@@ -119,7 +120,8 @@ proc addBlock*(
   # sanity check
   try:
     self.blocksQueue.addLastNoWait(BlockEntry(
-      blck: blck, resfut: resfut, queueTick: Moment.now(),
+      blck: blck,
+      resfut: resfut, queueTick: Moment.now(),
       validationDur: validationDur))
   except AsyncQueueFullError:
     raiseAssert "unbounded queue"
@@ -147,15 +149,41 @@ proc storeBlock(
   let
     attestationPool = self.consensusManager.attestationPool
 
+  type Trusted = typeof signedBlock.asTrusted()
   let blck = self.consensusManager.dag.addRawBlock(
     self.consensusManager.quarantine, signedBlock) do (
-      blckRef: BlockRef, trustedBlock: phase0.TrustedSignedBeaconBlock,
+      blckRef: BlockRef, trustedBlock: Trusted, epochRef: EpochRef):
+    # Callback add to fork choice if valid
+    attestationPool[].addForkChoice(
+      epochRef, blckRef, trustedBlock.message, wallSlot)
+
+  # TODO self.dumpBlock(signedBlock, blck)
+
+  # There can be a scenario where we receive a block we already received.
+  # However this block was before the last finalized epoch and so its parent
+  # was pruned from the ForkChoice.
+  if blck.isErr:
+    return err(blck.error[1])
+  ok()
+
+proc storeBlock(
+    self: var BlockProcessor, signedBlock: altair.SignedBeaconBlock,
+    wallSlot: Slot): Result[void, BlockError] =
+  let
+    attestationPool = self.consensusManager.attestationPool
+
+  # TODO only differs in altair.TrustedSignedBeaconBlock
+  let blck = self.consensusManager.dag.addRawBlock(
+    self.consensusManager.quarantine, signedBlock) do (
+      blckRef: BlockRef, trustedBlock: altair.TrustedSignedBeaconBlock,
       epochRef: EpochRef):
     # Callback add to fork choice if valid
     attestationPool[].addForkChoice(
       epochRef, blckRef, trustedBlock.message, wallSlot)
 
-  self.dumpBlock(signedBlock, blck)
+  when false:
+    # TODO altair
+    self.dumpBlock(signedBlock, blck)
 
   # There can be a scenario where we receive a block we already received.
   # However this block was before the last finalized epoch and so its parent
@@ -167,9 +195,20 @@ proc storeBlock(
 # Event Loop
 # ------------------------------------------------------------------------------
 
+# TODO extract if useful to helper module
+template getForkedBlockField(x, y: untyped): untyped =
+  case x.kind:
+  of BeaconBlockFork.Phase0: x.phase0Block.message.y
+  of BeaconBlockFork.Altair: x.altairBlock.message.y
+
+template getForkedBlockRoot(x): untyped =
+  case x.kind:
+  of BeaconBlockFork.Phase0: x.phase0Block.root
+  of BeaconBlockFork.Altair: x.altairBlock.root
+
 proc processBlock(self: var BlockProcessor, entry: BlockEntry) =
   logScope:
-    blockRoot = shortLog(entry.blck.root)
+    blockRoot = shortLog(getForkedBlockRoot(entry.blck))
 
   let
     wallTime = self.getCurrentBeaconTime()
@@ -181,7 +220,7 @@ proc processBlock(self: var BlockProcessor, entry: BlockEntry) =
 
   let
     startTick = Moment.now()
-    res = self.storeBlock(entry.blck, wallSlot)
+    res = withBlck(entry.blck): self.storeBlock(blck, wallSlot)
     storeBlockTick = Moment.now()
 
   if res.isOk():
@@ -198,7 +237,7 @@ proc processBlock(self: var BlockProcessor, entry: BlockEntry) =
 
     debug "Block processed",
       localHeadSlot = self.consensusManager.dag.head.slot,
-      blockSlot = entry.blck.message.slot,
+      blockSlot = getForkedBlockField(entry.blck, slot),
       validationDur = entry.validationDur,
       queueDur, storeBlockDur, updateHeadDur
 
